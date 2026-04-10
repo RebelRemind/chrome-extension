@@ -34,8 +34,11 @@ def extract_events_from_page(soup):
     results = []
     seen = set()
 
-    for container in soup.select("main li"):
-        link = container.find("a", href=True)
+    for link in soup.select('main li a[href*="/students/academic-calendar"]'):
+        container = link.find_parent("li")
+        if container is None:
+            continue
+
         if not link:
             continue
 
