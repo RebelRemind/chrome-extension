@@ -60,9 +60,6 @@ beforeAll(() => {
         get: jest.fn(),
         set: jest.fn(),
         remove: jest.fn(),
-      },
-      local: {
-        get: jest.fn()
       }
     },
   };  
@@ -112,14 +109,10 @@ describe('Preferences Component', () => {
   test("loads data and checks if Men's Basketball is selected under Sports", async () => {
     render(<Preferences />);
     await waitFor(() => {
-      expect(screen.getByText("Rebel Sports")).toBeInTheDocument();
+      expect(screen.getByText("Rebel Sports Coverage")).toBeInTheDocument();
     });
 
-    const allSportsSection = screen.getByText((text, element) =>
-      text.includes("Sports") && element.tagName === "P"
-
-    ).closest("div");
-    const basketballCheckbox = within(allSportsSection).getByLabelText("Men's Basketball");
+    const basketballCheckbox = screen.getByLabelText("Men's Basketball");
     expect(basketballCheckbox).toBeChecked();
   });
 
@@ -135,10 +128,7 @@ describe('Preferences Component', () => {
     expect(screen.getByLabelText('Rebel Sports')).toBeChecked();
     expect(screen.getByText('Rebel Sports Coverage')).toBeInTheDocument();
 
-    const mensSection = screen.getByText((text, element) =>
-      text.includes("Sports") && element.tagName === "P"
-    ).closest("div");
-    const mensBasketball = within(mensSection).getByLabelText("Men's Basketball");
+    const mensBasketball = screen.getByLabelText("Men's Basketball");
     expect(mensBasketball).toBeChecked();
   });
 

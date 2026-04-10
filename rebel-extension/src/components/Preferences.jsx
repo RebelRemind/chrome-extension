@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import CanvasTokenManager from "../components/CanvasTokenManager.jsx";
 import { FaQuestionCircle } from 'react-icons/fa';
 import NotificationToggle from "../components/NotificationToggle";
+import { buildDataUrl, DATA_FILES } from "../../public/scripts/data-source.js";
 
 /**
  * Preferences Component
@@ -96,7 +97,7 @@ const Preferences = ({ setupMode = false }) => {
     // =================== EFFECT: Fetch all clubs from API ===================
 
     useEffect(() => {
-        fetch("http://franklopez.tech:5050/organization_list")
+        fetch(buildDataUrl(DATA_FILES.organizations))
             .then((response) => {
                 if (!response.ok) throw new Error("Network response was not ok");
                 return response.json();

@@ -22,6 +22,7 @@ lib-cov
 # Coverage directory used by tools like istanbul
 coverage
 *.lcov
+.coverage
 
 # nyc test coverage
 .nyc_output
@@ -137,3 +138,4 @@ dist
 
 #.DS_store
 .DS_store
+docs/github-pages-data-setup.md

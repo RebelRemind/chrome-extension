@@ -83,6 +83,7 @@ global.chrome = {
     },
   },
   runtime: {
+    sendMessage: jest.fn(),
     onMessage: {
       addListener: jest.fn(),
       removeListener: jest.fn(),

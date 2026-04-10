@@ -1,0 +1,54 @@
+name: Publish Pages Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  publish-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout chrome-extension repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+        working-directory: backend
+
+      - name: Generate static JSON files
+        run: |
+          python backend/export_pages_data.py --output-dir /tmp/rebel-pages-data/data
+
+      - name: Checkout GitHub Pages repository
+        uses: actions/checkout@v4
+        with:
+          repository: RebelRemind/RebelRemind.github.io
+          token: ${{ secrets.PAGES_REPO_TOKEN }}
+          path: pages-repo
+
+      - name: Copy generated data into Pages repository
+        run: |
+          mkdir -p pages-repo/data
+          rsync -av --delete /tmp/rebel-pages-data/data/ pages-repo/data/
+
+      - name: Commit and push updated JSON
+        run: |
+          cd pages-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No data changes to publish."
+            exit 0
+          fi
+          git commit -m "Update RebelRemind data"
+          git push

@@ -1,16 +1,56 @@
+import { buildDataUrl, DATA_FILES } from "./data-source.js";
+
+function safeDate(dateString) {
+  if (!dateString) {
+    return null;
+  }
+
+  const parsed = new Date(`${dateString}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function filterEventsByView(events, today, viewMode) {
+  const startDate = safeDate(today);
+  if (!startDate) {
+    return [];
+  }
+
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + (viewMode === "weekly" ? 7 : 1));
+
+  return (Array.isArray(events) ? events : []).filter((event) => {
+    const eventDate = safeDate(event.startDate);
+    if (!eventDate) {
+      return false;
+    }
+
+    return eventDate >= startDate && eventDate < endDate;
+  });
+}
+
 export async function fetchEvents(today, viewMode="daily") {
   try {
     const [res1, res2, res3, res4] = await Promise.all([
-      fetch(`http://franklopez.tech:5050/academiccalendar_${viewMode}/${today}`),
-      fetch(`http://franklopez.tech:5050/involvementcenter_${viewMode}/${today}`),
-      fetch(`http://franklopez.tech:5050/rebelcoverage_${viewMode}/${today}`),
-      fetch(`http://franklopez.tech:5050/unlvcalendar_${viewMode}/${today}`)
+      fetch(buildDataUrl(DATA_FILES.academicCalendar)),
+      fetch(buildDataUrl(DATA_FILES.involvementCenter)),
+      fetch(buildDataUrl(DATA_FILES.rebelCoverage)),
+      fetch(buildDataUrl(DATA_FILES.unlvCalendar))
     ]);
+
+    if (![res1, res2, res3, res4].every((response) => response.ok)) {
+      throw new Error("One or more static event files could not be loaded");
+    }
 
     const [data1, data2, data3, data4] = await Promise.all([
       res1.json(), res2.json(), res3.json(), res4.json()
     ]);
-    return [data1, data2, data3, data4];
+
+    return [
+      filterEventsByView(data1, today, viewMode),
+      filterEventsByView(data2, today, viewMode),
+      filterEventsByView(data3, today, viewMode),
+      filterEventsByView(data4, today, viewMode),
+    ];
   } catch (err) {
     console.error('Error fetching events:', err);
     return [null, null, null, null];

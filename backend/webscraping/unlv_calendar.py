@@ -1,61 +1,150 @@
+import re
+
 import requests
-import json
 from bs4 import BeautifulSoup
 from database import BASE
-import openai
 
 # URL of the UNLV event calendar
 URL = "https://www.unlv.edu/calendar"
 
-openai.api_key = ''
+INTERESTS = [
+    "Arts",
+    "Academics",
+    "Career",
+    "Culture",
+    "Diversity",
+    "Health",
+    "Social",
+    "Sports",
+    "Tech",
+    "Community",
+]
 
-def ai_categorize_event(event_name):
-    try:
-        prompt = f"""
-        Given the following event title: "{event_name}"
+CATEGORY_KEYWORDS = {
+    "Arts": {
+        "art", "arts", "artist", "gallery", "exhibit", "exhibition", "museum",
+        "music", "concert", "band", "orchestra", "choir", "theater", "theatre",
+        "film", "cinema", "screening", "dance", "poetry", "creative", "design",
+        "fashion", "performance", "visual", "craft",
+    },
+    "Academics": {
+        "academic", "academics", "class", "classes", "course", "courses", "study",
+        "studies", "research", "lecture", "seminar", "symposium", "colloquium",
+        "workshop", "lab", "exam", "midterm", "finals", "orientation",
+        "advising", "tutoring", "curriculum", "faculty", "scholar", "learning",
+        "dissertation", "thesis", "defense", "defenses", "presentation",
+        "presentations", "library", "student", "graduate", "grad", "literacy",
+    },
+    "Career": {
+        "career", "careers", "resume", "interview", "networking", "employer",
+        "internship", "internships", "job", "jobs", "hiring", "recruiting",
+        "recruitment", "professional", "professionals", "leadership",
+        "entrepreneur", "entrepreneurship", "linkedin", "business", "workforce",
+        "readiness", "representative", "visit", "postgraduate", "post-graduate",
+        "finance", "financial", "aid",
+    },
+    "Culture": {
+        "culture", "cultural", "heritage", "language", "tradition", "traditions",
+        "global", "international", "multicultural", "festival", "celebration",
+        "history", "diaspora", "filipino", "chinese", "medicine",
+    },
+    "Diversity": {
+        "diversity", "equity", "inclusion", "inclusive", "belonging", "identity",
+        "identities", "justice", "advocacy", "allyship", "intersectionality",
+        "women", "latinx", "hispanic", "black", "asian", "pacific", "indigenous",
+        "lgbt", "lgbtq", "pride", "disability", "accessibility", "queer",
+        "veteran", "veterans", "generation", "first-generation",
+    },
+    "Health": {
+        "health", "wellness", "mental", "mindfulness", "fitness", "exercise",
+        "workout", "nutrition", "therapy", "counseling", "self-care", "yoga",
+        "meditation", "medical", "clinic", "stress", "recovery", "sleep",
+        "blood", "cpr", "aed", "first", "aid", "grounding", "centering",
+        "breath", "care",
+    },
+    "Social": {
+        "social", "mixer", "meetup", "hangout", "party", "celebration", "game",
+        "games", "trivia", "movie", "welcome", "friendship", "fun", "fest",
+        "reception", "picnic", "bingo", "bites", "coffee", "appreciation",
+        "member", "members", "meeting", "meetings", "hour",
+    },
+    "Sports": {
+        "sport", "sports", "athletic", "athletics", "game", "games", "match",
+        "tournament", "playoff", "practice", "baseball", "basketball", "football",
+        "soccer", "softball", "tennis", "golf", "volleyball", "swimming",
+        "diving", "track", "cross", "run", "running", "rebel",
+    },
+    "Tech": {
+        "tech", "technology", "coding", "code", "programming", "developer",
+        "development", "software", "hardware", "ai", "robotics", "cyber",
+        "cybersecurity", "data", "engineering", "computer", "computing", "hack",
+        "hackathon", "stem", "machine", "science",
+    },
+    "Community": {
+        "community", "service", "volunteer", "volunteering", "outreach", "cleanup",
+        "donation", "fundraiser", "charity", "support", "neighbors", "civic",
+        "engagement", "drive", "food", "pantry",
+    },
+}
 
-        Choose the most appropriate category from this list:
-        Arts, Academics, Career, Culture, Diversity, Health, Social, Sports, Tech, Community
+PHRASE_BONUSES = {
+    "Arts": ("art show", "live music", "film screening", "poetry slam"),
+    "Academics": (
+        "research symposium", "study session", "academic advising",
+        "dissertation defense", "thesis defense", "study night", "online classes",
+    ),
+    "Career": (
+        "career fair", "resume workshop", "mock interview", "job fair",
+        "employer visit", "post graduate careers", "financial aid",
+    ),
+    "Culture": (
+        "cultural festival", "heritage month", "international night",
+        "traditional chinese medicine", "global success series",
+    ),
+    "Diversity": (
+        "diversity dialogue", "equity summit", "pride week", "queer mini con",
+        "first generation",
+    ),
+    "Health": (
+        "mental health", "wellness week", "self care", "fitness class",
+        "blood drive", "guided meditation", "first aid certification",
+    ),
+    "Social": (
+        "game night", "welcome week", "ice cream", "movie night",
+        "happy hour", "grad fest", "general member meetings", "bingo bites",
+    ),
+    "Sports": ("basketball game", "football game", "soccer match"),
+    "Tech": ("career in tech", "data science", "computer science", "artificial intelligence"),
+    "Community": ("community service", "food drive", "service day", "volunteer day"),
+}
 
-        Return only the category name.
-        If no category fits, return "None".
-        """
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an assistant that classifies event titles into categories."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0  # deterministic response
-        )
+def normalize_text(text):
+    return re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower()).strip()
 
-        category = response.choices[0].message.content.strip()
 
-        #  make sure it is in our list
-        INTERESTS = [
-            "Arts",
-            "Academics",
-            "Career",
-            "Culture",
-            "Diversity",
-            "Health",
-            "Social",
-            "Sports",
-            "Tech",
-            "Community"
-        ]
-
-        if category in INTERESTS:
-          #  print(f"[AI] Categorized '{event_name}' as '{category}'")
-            return category
-        else:
-           # print(f"[AI] Unrecognized category for '{event_name}'. AI returned: {category}")
-            return None
-
-    except Exception as e:
-        print(f"[Error] AI categorization failed for '{event_name}': {e}")
+def categorize_event(event_name):
+    normalized_name = normalize_text(event_name)
+    if not normalized_name:
         return None
-        
+
+    tokens = set(normalized_name.split())
+    category_scores = {category: 0 for category in INTERESTS}
+
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        matches = tokens.intersection(keywords)
+        category_scores[category] += len(matches)
+
+    for category, phrases in PHRASE_BONUSES.items():
+        for phrase in phrases:
+            if phrase in normalized_name:
+                category_scores[category] += 2
+
+    best_category = max(category_scores, key=category_scores.get)
+    if category_scores[best_category] == 0:
+        return None
+    return best_category
+
+
 def scrape():
     # Make request inside function
     response = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"})
@@ -90,7 +179,7 @@ def scrape():
                 "category": None,
                 "link": link
             }
-            category = ai_categorize_event(title)
+            category = categorize_event(title)
             event_data["category"] = category
             # Send event data to Flask API
             # api_response = requests.put(BASE + f"unlvcalendar_id/{event_id}", json=event_data)
