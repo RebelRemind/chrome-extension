@@ -34,26 +34,32 @@ def extract_events_from_page(soup):
     results = []
     seen = set()
 
-    for link in soup.select('main li a[href*="/students/academic-calendar"]'):
-        container = link.find_parent("li")
-        if container is None:
+    for container in soup.select("div.view-content div.item-list > ul > li"):
+        link = container.select_one("div.click-region-link a[href]")
+        if link is None:
             continue
 
-        if not link:
-            continue
-
-        title = " ".join(link.get_text(" ", strip=True).split())
+        title_node = container.select_one("div.description div.title-text")
+        title = " ".join(
+            (title_node.get_text(" ", strip=True) if title_node else link.get_text(" ", strip=True)).split()
+        )
         if not title:
             continue
 
-        lines = extract_event_lines(container)
-        date_text = next(
-            (
-                line for line in lines
-                if parse_event_date(line, current_year) is not None
-            ),
-            None,
-        )
+        month_node = container.select_one("div.event-date span.event-month")
+        day_node = container.select_one("div.event-date span.event-day")
+        date_text = None
+        if month_node and day_node:
+            date_text = f"{month_node.get_text(strip=True)} {day_node.get_text(strip=True)}"
+
+        if not date_text:
+            lines = extract_event_lines(container)
+            for index, line in enumerate(lines[:-1]):
+                candidate = f"{line} {lines[index + 1]}"
+                if parse_event_date(candidate, current_year) is not None:
+                    date_text = candidate
+                    break
+
         if not date_text:
             continue
 
