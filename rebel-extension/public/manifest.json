@@ -65,11 +65,12 @@
     },
     {
       "matches": [
+        "https://rebelremind.com/*",
         "https://rebelremind.github.io/*",
         "https://www.rebelremind.github.io/*",
         "https://www.rebelremind.com/*",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
       ],
       "js": [
         "scripts/pages-bridge.js"
