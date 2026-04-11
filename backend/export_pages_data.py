@@ -56,6 +56,7 @@ def normalize_academic_calendar(items):
                 "startTime": format_time(item.get("startTime", "")),
                 "endDate": end_date,
                 "endTime": format_time(item.get("endTime", "")),
+                "link": item.get("link", ""),
             }
         )
     return normalized

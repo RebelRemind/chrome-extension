@@ -13,9 +13,15 @@ def test_format_time_normalizes_24_hour_time():
 
 def test_normalize_academic_calendar_converts_date():
     result = normalize_academic_calendar(
-        [{"name": "Spring Break", "startDate": "Monday, March 17, 2025", "endDate": "Monday, March 17, 2025"}]
+        [{
+            "name": "Spring Break",
+            "startDate": "Monday, March 17, 2025",
+            "endDate": "Monday, March 17, 2025",
+            "link": "https://example.com/academic",
+        }]
     )
     assert result[0]["startDate"] == "2025-03-17"
+    assert result[0]["link"] == "https://example.com/academic"
 
 
 def test_normalize_involvement_center_preserves_iso_dates():

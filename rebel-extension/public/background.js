@@ -17,6 +17,156 @@ import { openSidePanel } from "./scripts/sidepanel.js";
 import { getGoogleToken, syncCalendar, getCalendarID, getOrCreateCalendar, gatherEvents, checkCalendarExists } from "./scripts/GoogleCalendar.js";
 import { alarmInstall, storageListener, chromeStartUpListener, dailyAlarmListener, onClickNotification} from "./scripts/notifications.js";
 
+const PAGES_BRIDGE_SYNC_KEYS = [
+  "user",
+  "preferences",
+  "backgroundColor",
+  "textColor",
+  "selectedThemeKey",
+  "involvedClubs",
+  "selectedInterests",
+  "selectedSports",
+];
+
+const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC"];
+
+function parseAssignmentDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  const normalized = new Date(String(value).replace(",", ""));
+  if (!Number.isNaN(normalized.getTime())) {
+    return normalized;
+  }
+
+  return null;
+}
+
+function parseUserEventDateTime(event) {
+  if (!event?.startDate) {
+    return null;
+  }
+
+  const [year, month, day] = event.startDate.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const parsed = new Date(year, month - 1, day);
+
+  if (!event.allDay && event.startTime) {
+    const [hours, minutes] = event.startTime.split(":").map(Number);
+    parsed.setHours(hours || 0, minutes || 0, 0, 0);
+  } else {
+    parsed.setHours(0, 0, 0, 0);
+  }
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseInvolvementCenterDateTime(event) {
+  if (!event?.startDate) {
+    return null;
+  }
+
+  const parsed = new Date(`${event.startDate} ${event.startTime || "12:00 AM"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildPagesBridgePayload(syncData, localData) {
+  const now = new Date();
+  const upcomingAssignments = Array.isArray(localData.Canvas_Assignments)
+    ? localData.Canvas_Assignments
+        .map((assignment) => ({
+          ...assignment,
+          parsedDueAt: parseAssignmentDate(assignment?.due_at),
+        }))
+        .filter((assignment) => assignment.parsedDueAt)
+        .filter((assignment) => assignment.parsedDueAt >= now)
+        .sort((left, right) => left.parsedDueAt - right.parsedDueAt)
+        .slice(0, 4)
+        .map((assignment) => ({
+          id: assignment.id,
+          title: assignment.title || "Untitled Assignment",
+          courseName: assignment.context_name || "",
+          dueAt: assignment.due_at,
+          link: assignment.html_url || "",
+        }))
+    : [];
+  const upcomingAssignmentCount = Array.isArray(localData.Canvas_Assignments)
+    ? localData.Canvas_Assignments
+        .map((assignment) => parseAssignmentDate(assignment?.due_at))
+        .filter((dueAt) => dueAt && dueAt >= now)
+        .length
+    : 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcomingUserEvents = Array.isArray(localData.userEvents)
+    ? localData.userEvents
+        .map((event) => ({
+          ...event,
+          parsedStart: parseUserEventDateTime(event),
+        }))
+        .filter((event) => event.parsedStart && event.parsedStart >= today)
+        .sort((left, right) => left.parsedStart - right.parsedStart)
+        .map(({ parsedStart, ...event }) => event)
+    : [];
+  const upcomingICEvents = Array.isArray(localData.filteredIC)
+    ? localData.filteredIC
+        .map((event) => ({
+          ...event,
+          parsedStart: parseInvolvementCenterDateTime(event),
+        }))
+        .filter((event) => event.parsedStart && event.parsedStart >= today)
+        .sort((left, right) => left.parsedStart - right.parsedStart)
+        .map(({ parsedStart, ...event }) => event)
+    : [];
+
+  const user = syncData.user
+    ? {
+        name: syncData.user.name || "",
+        email: syncData.user.email || "",
+        picture: syncData.user.picture || "",
+      }
+    : null;
+
+  return {
+    user,
+    preferences: syncData.preferences || {},
+    theme: {
+      backgroundColor: syncData.backgroundColor || "#BB0000",
+      textColor: syncData.textColor || "#d3d3d3",
+      selectedThemeKey: syncData.selectedThemeKey || "custom",
+    },
+    involvedClubs: Array.isArray(syncData.involvedClubs) ? syncData.involvedClubs : [],
+    selectedInterests: Array.isArray(syncData.selectedInterests) ? syncData.selectedInterests : [],
+    selectedSports: Array.isArray(syncData.selectedSports) ? syncData.selectedSports : [],
+    userEventCount: upcomingUserEvents.length + upcomingICEvents.length,
+    userEvents: upcomingUserEvents,
+    involvementCenterEvents: upcomingICEvents,
+    assignmentCount: Array.isArray(localData.Canvas_Assignments) ? localData.Canvas_Assignments.length : 0,
+    upcomingAssignmentCount,
+    upcomingAssignments,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+function getPagesBridgeState(sendResponse) {
+  chrome.storage.sync.get(PAGES_BRIDGE_SYNC_KEYS, (syncData) => {
+    chrome.storage.local.get(PAGES_BRIDGE_LOCAL_KEYS, (localData) => {
+      sendResponse({
+        success: true,
+        payload: buildPagesBridgePayload(syncData, localData),
+      });
+    });
+  });
+}
 
 /**
 * Listens for and handles any Chrome alarms.
@@ -113,6 +263,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.sync.get("user", (data) => {
         sendResponse({ isAuthenticated: !!data.user }); // Returns `true` if a user is logged in.
       });
+      return true;
+
+    case "GET_PAGES_BRIDGE_STATE":
+      getPagesBridgeState(sendResponse);
       return true;
 
     /**

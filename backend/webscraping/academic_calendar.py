@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 from database import BASE
@@ -80,6 +81,7 @@ def extract_events_from_page(soup):
                 "name": title,
                 "startDate": formatted_date,
                 "endDate": formatted_date,
+                "link": urljoin(URL, link.get("href", "")),
             }
         )
 

@@ -48,19 +48,40 @@
         "scripts/floating-timer.js",
         "scripts/remove-widget.js"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["scripts/floating-widget.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "scripts/floating-widget.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://rebelremind.github.io/*",
+        "https://www.rebelremind.github.io/*"
+      ],
+      "js": [
+        "scripts/pages-bridge.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnELBMRwWNYDRAUAiOD1boCMGxdhIMp72vEn2cmf0Kt/a6jN2/I13USk/ZXNQFGPomBPmNkBzA163bZs+PH7vsc7HQSa0Tctx28ekWcsIRYEbz6zFKhsnJXP1D1oHBxURitZi0D3lGJnZSskzcRjV43pRJg8m3OKvNy5JOPw9GgWGtNV4p+b3qZVPaHd/oafY3alH9f2U1Fk7YH6OVwfpehVuZ/a6Hn9SMr8IPkD2PfAFov4OLNHL1YaMKCzGZLWKQBKVWLQGQBYxesSakefgUfOViOb5Go4YkR+3eHdEgh7cPQECEuJrPCOMQqH5B99RSPQPLRG4AfZb3imBuZYHJwIDAQAB",
   "oauth2": {
     "client_id": "79022561637-v6gffnn0h388bj9rt9dkfiheacmhgb24.apps.googleusercontent.com",
-    "scopes": ["openid", "email", "profile", "https://www.googleapis.com/auth/calendar"]
+    "scopes": [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/calendar"
+    ]
   }
 }
