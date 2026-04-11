@@ -2,7 +2,9 @@ const SITE_APP = "rebelremind-site";
 const EXTENSION_APP = "rebelremind-extension";
 const ALLOWED_ORIGINS = new Set([
   "https://rebelremind.github.io",
+  "https://rebelremind.com",
   "https://www.rebelremind.github.io",
+  "https://www.rebelremind.com,",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ]);
