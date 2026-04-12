@@ -28,7 +28,7 @@ const PAGES_BRIDGE_SYNC_KEYS = [
   "selectedSports",
 ];
 
-const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents"];
+const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents", "colorList"];
 
 function parseAssignmentDate(value) {
   if (!value) {
@@ -135,6 +135,8 @@ function buildBridgeCalendarEvents(localData) {
             description: assignment.context_name || "",
             link: assignment.html_url || "",
             sourceLabel: "Canvas",
+            eventType: "canvasAssignment",
+            courseID: assignment.course_id || null,
             calendarKey: "extensionEvents",
           }];
         })
@@ -153,6 +155,7 @@ function buildBridgeCalendarEvents(localData) {
         description: event.desc || "",
         link: "",
         sourceLabel: "Your Events",
+        eventType: "userEvents",
         calendarKey: "extensionEvents",
       }))
     : [];
@@ -170,6 +173,7 @@ function buildBridgeCalendarEvents(localData) {
         description: event.organization ? `RSO: ${event.organization}` : "",
         link: event.link || "",
         sourceLabel: "Involvement Center",
+        eventType: "InvolvementCenter",
         calendarKey: "extensionEvents",
       }))
     : [];
@@ -187,6 +191,7 @@ function buildBridgeCalendarEvents(localData) {
         description: event.organization || event.category || event.sport || "",
         link: event.link || "",
         sourceLabel: getSavedEventSourceLabel(event),
+        eventType: "UNLVEvents",
         calendarKey: "extensionEvents",
       }))
     : [];
@@ -269,6 +274,7 @@ function buildPagesBridgePayload(syncData, localData) {
     assignmentCount: Array.isArray(localData.Canvas_Assignments) ? localData.Canvas_Assignments.length : 0,
     upcomingAssignmentCount,
     upcomingAssignments,
+    colorList: localData.colorList || null,
     calendarEvents: bridgeCalendarEvents,
     syncedAt: new Date().toISOString(),
   };

@@ -270,13 +270,13 @@ function CalendarMenu() {
       	  style={{ height: 700 }}
 		  // ai-gen start (ChatGPT-4o, 2)
 		  eventPropGetter={(event) => {
-			let backgroundColor = "";
+			let backgroundColor = "#3174ad";
 			if (event.id === 0) {
-				const courseColors = colorList.CanvasCourses;
-				backgroundColor = courseColors[event.courseID].color;
+				const courseColors = colorList?.CanvasCourses || {};
+				backgroundColor = courseColors?.[event.courseID]?.color || "#3174ad";
 			}
 			else {
-				backgroundColor = colorList[event.eventType];
+				backgroundColor = colorList?.[event.eventType] || "#8b0000";
 			}
 			const textColor = getTextColor(backgroundColor);
 			return {
@@ -416,9 +416,17 @@ const getSavedUNLVEvents = async() => {
  */
 // ai-gen start (ChatGPT-4o, 0)
 function getTextColor(backgroundColor) {
+	if (!backgroundColor || typeof backgroundColor !== "string" || !backgroundColor.startsWith("#") || backgroundColor.length < 7) {
+		return "white";
+	}
+
 	const r = parseInt(backgroundColor.substring(1, 3), 16);
 	const g = parseInt(backgroundColor.substring(3, 5), 16);
 	const b = parseInt(backgroundColor.substring(5, 7), 16);
+
+	if ([r, g, b].some((value) => Number.isNaN(value))) {
+		return "white";
+	}
 
 	const brightness = (r * 299 + g * 587 + b * 114) / 1000;
 	return brightness > 125 ? "black" : "white";
