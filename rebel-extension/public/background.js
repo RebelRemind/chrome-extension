@@ -28,7 +28,7 @@ const PAGES_BRIDGE_SYNC_KEYS = [
   "selectedSports",
 ];
 
-const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC"];
+const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents"];
 
 function parseAssignmentDate(value) {
   if (!value) {
@@ -79,8 +79,124 @@ function parseInvolvementCenterDateTime(event) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function toBridgeDate(parsedDate) {
+  if (!(parsedDate instanceof Date) || Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  const year = parsedDate.getFullYear();
+  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+  const day = String(parsedDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toBridgeTime(parsedDate) {
+  if (!(parsedDate instanceof Date) || Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function getSavedEventSourceLabel(event) {
+  if (event?.sport) {
+    return "Rebel Sports";
+  }
+
+  if (event?.category) {
+    return "UNLV Calendar";
+  }
+
+  return "Saved Campus Event";
+}
+
+function buildBridgeCalendarEvents(localData) {
+  const canvasEvents = Array.isArray(localData.Canvas_Assignments)
+    ? localData.Canvas_Assignments
+        .flatMap((assignment) => {
+          const dueAt = parseAssignmentDate(assignment?.due_at);
+          if (!dueAt) {
+            return [];
+          }
+
+          return [{
+            id: `canvas-${assignment.id}`,
+            title: assignment.title || "Untitled Assignment",
+            startDate: toBridgeDate(dueAt),
+            endDate: toBridgeDate(dueAt),
+            startTime: toBridgeTime(dueAt),
+            endTime: toBridgeTime(dueAt),
+            allDay: false,
+            location: "",
+            description: assignment.context_name || "",
+            link: assignment.html_url || "",
+            sourceLabel: "Canvas",
+            calendarKey: "extensionEvents",
+          }];
+        })
+    : [];
+
+  const userEvents = Array.isArray(localData.userEvents)
+    ? localData.userEvents.map((event, index) => ({
+        id: `user-${event.title || "event"}-${event.startDate || index}-${index}`,
+        title: event.title || "Custom Event",
+        startDate: event.startDate || "",
+        endDate: event.endDate || event.startDate || "",
+        startTime: event.allDay ? "(ALL DAY)" : (event.startTime || ""),
+        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || event.startTime || ""),
+        allDay: Boolean(event.allDay),
+        location: event.location || "",
+        description: event.desc || "",
+        link: "",
+        sourceLabel: "Your Events",
+        calendarKey: "extensionEvents",
+      }))
+    : [];
+
+  const involvementCenterEvents = Array.isArray(localData.filteredIC)
+    ? localData.filteredIC.map((event, index) => ({
+        id: `ic-${event.name || "event"}-${event.startDate || index}-${index}`,
+        title: event.name || "Involvement Center Event",
+        startDate: event.startDate || "",
+        endDate: event.endDate || event.startDate || "",
+        startTime: event.startTime || "",
+        endTime: event.endTime || event.startTime || "",
+        allDay: event.startTime === "(ALL DAY)",
+        location: event.location || "",
+        description: event.organization ? `RSO: ${event.organization}` : "",
+        link: event.link || "",
+        sourceLabel: "Involvement Center",
+        calendarKey: "extensionEvents",
+      }))
+    : [];
+
+  const savedCampusEvents = Array.isArray(localData.savedUNLVEvents)
+    ? localData.savedUNLVEvents.map((event, index) => ({
+        id: `saved-${event.name || "event"}-${event.startDate || index}-${index}`,
+        title: event.name || "Saved Campus Event",
+        startDate: event.startDate || "",
+        endDate: event.endDate || event.startDate || "",
+        startTime: event.startTime || "",
+        endTime: event.endTime || event.startTime || "",
+        allDay: event.startTime === "(ALL DAY)",
+        location: event.location || "",
+        description: event.organization || event.category || event.sport || "",
+        link: event.link || "",
+        sourceLabel: getSavedEventSourceLabel(event),
+        calendarKey: "extensionEvents",
+      }))
+    : [];
+
+  return [...canvasEvents, ...userEvents, ...involvementCenterEvents, ...savedCampusEvents];
+}
+
 function buildPagesBridgePayload(syncData, localData) {
   const now = new Date();
+  const bridgeCalendarEvents = buildBridgeCalendarEvents(localData);
   const upcomingAssignments = Array.isArray(localData.Canvas_Assignments)
     ? localData.Canvas_Assignments
         .map((assignment) => ({
@@ -153,6 +269,7 @@ function buildPagesBridgePayload(syncData, localData) {
     assignmentCount: Array.isArray(localData.Canvas_Assignments) ? localData.Canvas_Assignments.length : 0,
     upcomingAssignmentCount,
     upcomingAssignments,
+    calendarEvents: bridgeCalendarEvents,
     syncedAt: new Date().toISOString(),
   };
 }

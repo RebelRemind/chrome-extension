@@ -57,7 +57,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
   const relevantKeys = areaName === "sync"
     ? ["user", "preferences", "backgroundColor", "textColor", "selectedThemeKey"]
-    : ["userEvents", "Canvas_Assignments"];
+    : ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents"];
 
   if (!Object.keys(changes).some((key) => relevantKeys.includes(key))) {
     return;
