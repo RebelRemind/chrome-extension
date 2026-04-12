@@ -1,14 +1,19 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pytz import timezone
 from database import BASE
 
 URL = "https://involvementcenter.unlv.edu/api/discovery/event/search?"
-QUERY = f"endsAfter={datetime.today()}&orderByField=endsOn&orderByDirection=ascending&status=Approved&take=9999"
+PAST_MONTH_WINDOW_DAYS = 90
+
+
+def build_query():
+    cutoff = (datetime.now() - timedelta(days=PAST_MONTH_WINDOW_DAYS)).isoformat()
+    return f"endsAfter={cutoff}&orderByField=endsOn&orderByDirection=ascending&status=Approved&take=9999"
 
 def scrape():
-    response = requests.get(URL+QUERY)
+    response = requests.get(URL + build_query())
     json_data = response.json()
     events = json_data['value']
     results = []
@@ -19,6 +24,10 @@ def scrape():
     # with open('scraped_InvolvementCenter.json', 'w', encoding='utf-8') as f:
     #     json.dump(results, f, indent=4)
     return results
+
+
+def format_local_time(value):
+    return value.strftime("%I:%M %p").lstrip("0")
 
 def default():
     results = scrape()
@@ -39,8 +48,8 @@ def map_event(event_json):
     startDate = str(local_startTime.date())
     endDate = str(local_endTime.date())
     # Strip time
-    startTime = str(local_startTime.strftime('%I:%M %p'))
-    endTime = str(local_endTime.strftime('%I:%M %p'))
+    startTime = format_local_time(local_startTime)
+    endTime = format_local_time(local_endTime)
 
     return {
         'name': event_json['name'],

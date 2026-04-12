@@ -23,27 +23,6 @@ def parse_date(value, formats):
     return value
 
 
-def format_time(value):
-    if not value:
-        return ""
-
-    raw = value.strip()
-    upper = raw.upper()
-
-    if upper in {"(ALL DAY)", "ALL DAY", "TBA", "NO TIME"}:
-        return "(ALL DAY)" if "ALL DAY" in upper else ""
-
-    for time_format in ("%I:%M %p", "%I %p", "%H:%M:%S", "%H:%M"):
-        try:
-            parsed = datetime.strptime(upper, time_format)
-            hour = parsed.strftime("%I").lstrip("0") or "12"
-            return f"{hour}:{parsed.strftime('%M')} {parsed.strftime('%p')}"
-        except ValueError:
-            continue
-
-    return raw
-
-
 def normalize_academic_calendar(items):
     normalized = []
     for item in items:
@@ -53,9 +32,9 @@ def normalize_academic_calendar(items):
             {
                 "name": item.get("name", ""),
                 "startDate": start_date,
-                "startTime": format_time(item.get("startTime", "")),
+                "startTime": item.get("startTime", ""),
                 "endDate": end_date,
-                "endTime": format_time(item.get("endTime", "")),
+                "endTime": item.get("endTime", ""),
                 "link": item.get("link", ""),
             }
         )
@@ -69,9 +48,9 @@ def normalize_involvement_center(items):
             {
                 "name": item.get("name", ""),
                 "startDate": parse_date(item.get("startDate", ""), ("%Y-%m-%d",)),
-                "startTime": format_time(item.get("startTime", "")),
+                "startTime": item.get("startTime", ""),
                 "endDate": parse_date(item.get("endDate", ""), ("%Y-%m-%d",)),
-                "endTime": format_time(item.get("endTime", "")),
+                "endTime": item.get("endTime", ""),
                 "location": item.get("location", ""),
                 "organization": item.get("organization", ""),
                 "link": item.get("link", ""),
@@ -89,9 +68,9 @@ def normalize_rebel_coverage(items):
             {
                 "name": item.get("name", ""),
                 "startDate": start_date,
-                "startTime": format_time(item.get("startTime", "")),
+                "startTime": item.get("startTime", ""),
                 "endDate": end_date,
-                "endTime": format_time(item.get("endTime", "")),
+                "endTime": item.get("endTime", ""),
                 "location": item.get("location", ""),
                 "sport": item.get("sport", ""),
                 "link": item.get("link", ""),
@@ -109,9 +88,9 @@ def normalize_unlv_calendar(items):
             {
                 "name": item.get("name", ""),
                 "startDate": start_date,
-                "startTime": format_time(item.get("startTime", "")),
+                "startTime": item.get("startTime", ""),
                 "endDate": end_date,
-                "endTime": format_time(item.get("endTime", "")),
+                "endTime": item.get("endTime", ""),
                 "location": item.get("location", ""),
                 "category": item.get("category"),
                 "link": item.get("link", ""),

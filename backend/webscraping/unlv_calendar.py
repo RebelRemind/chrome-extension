@@ -1,4 +1,5 @@
 import re
+from datetime import date, datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
@@ -118,6 +119,26 @@ PHRASE_BONUSES = {
     "Community": ("community service", "food drive", "service day", "volunteer day"),
 }
 
+PAST_MONTH_WINDOW_DAYS = 90
+FUTURE_WEEK_BUFFER = 1
+
+
+def normalize_time_label(raw_time):
+    value = " ".join((raw_time or "").split())
+    if not value or value.upper() in {"NO TIME", "TBA", "TIME TBD"}:
+        return ""
+    if "ALL DAY" in value.upper():
+        return "(ALL DAY)"
+
+    match = re.search(r"(\d{1,2})(?::(\d{2}))?\s*([AP]M)", value, re.I)
+    if not match:
+        return value
+
+    hour = int(match.group(1))
+    minute = match.group(2) or "00"
+    meridiem = match.group(3).upper()
+    return f"{hour}:{minute} {meridiem}"
+
 def normalize_text(text):
     return re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower()).strip()
 
@@ -145,58 +166,79 @@ def categorize_event(event_name):
     return best_category
 
 
+def build_week_url(target_date):
+    iso_year, iso_week, _ = target_date.isocalendar()
+    return f"{URL}/{iso_year}-W{iso_week:02d}"
+
+
+def iter_week_urls():
+    today = date.today()
+    cutoff = today - timedelta(days=PAST_MONTH_WINDOW_DAYS)
+    current_week_start = today - timedelta(days=today.weekday())
+    start_week = cutoff - timedelta(days=cutoff.weekday())
+    end_week = current_week_start + timedelta(weeks=FUTURE_WEEK_BUFFER)
+
+    week_start = start_week
+    while week_start <= end_week:
+        yield build_week_url(week_start)
+        week_start += timedelta(weeks=1)
+
+
+def parse_events_from_soup(soup):
+    events = []
+    seen = set()
+
+    # Loop through each event on the page
+    for event in soup.find_all("div", class_="col-sm-10"):
+        title_elem = event.find("a")
+        title = title_elem.text.strip() if title_elem else "No Title"
+        link = "https://www.unlv.edu" + title_elem["href"] if title_elem else "No Link"
+
+        time_elem = event.find_next_sibling("div", class_="col-sm-2")
+        time = time_elem.text.strip() if time_elem else "No Time"
+
+        location_elem = event.find_next_sibling("div", class_="col-sm-12 text-sm")
+        location = location_elem.text.strip() if location_elem else "No Location"
+        date_elem = event.find_previous("div", class_="card-header")
+        event_date = date_elem.text.strip() if date_elem else "TBD"
+
+        dedupe_key = (title, event_date, time, location)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        event_data = {
+            "name": title,
+            "startDate": event_date,
+            "startTime": normalize_time_label(time),
+            "endDate": event_date,
+            "location": location,
+            "category": categorize_event(title),
+            "link": link,
+        }
+        events.append(event_data)
+
+    return events
+
+
 def scrape():
-    # Make request inside function
-    response = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"})
-    index = 0
-    if response.status_code == 200:
+    all_events = []
+    seen = set()
+
+    for week_url in iter_week_urls():
+        response = requests.get(week_url, headers={"User-Agent": "Mozilla/5.0"})
+        if response.status_code != 200:
+            continue
+
         soup = BeautifulSoup(response.text, "html.parser")
-        
-        events = []  # Initialize an empty list to hold events
+        for event in parse_events_from_soup(soup):
+            dedupe_key = (event["name"], event["startDate"], event["startTime"], event["location"])
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            all_events.append(event)
 
-        # Loop through each event on the page
-        for event in soup.find_all("div", class_="col-sm-10"):
-            title_elem = event.find("a")
-            title = title_elem.text.strip() if title_elem else "No Title"
-            link = "https://www.unlv.edu" + title_elem["href"] if title_elem else "No Link"
-
-            time_elem = event.find_next_sibling("div", class_="col-sm-2")
-            time = time_elem.text.strip() if time_elem else "No Time"
-
-            location_elem = event.find_next_sibling("div", class_="col-sm-12 text-sm")
-            location = location_elem.text.strip() if location_elem else "No Location"
-            # Extract date 
-            date_elem = event.find_previous("div", class_="card-header")
-            date = date_elem.text.strip() if date_elem else "TBD"
-           
-            # Prepare event data to send to the Flask API
-            event_data = {
-                "name": title,
-                "startDate": date,  
-                "startTime": time,
-                "endDate": date,
-                "location": location,
-                "category": None,
-                "link": link
-            }
-            category = categorize_event(title)
-            event_data["category"] = category
-            # Send event data to Flask API
-            # api_response = requests.put(BASE + f"unlvcalendar_id/{event_id}", json=event_data)
-            # api_response = requests.put(BASE + "unlvcalendar_add", json=event_data)
-            # if api_response.status_code == 201:
-            #     pass
-
-            events.append(event_data)  # Add event data to the events list
-            # index += 1
-            # if index == 10:
-            #   break
-            
-        # with open('scraped_UNLVCalendar.json', 'w') as json_file:
-        #     json.dump(events, json_file, indent=4)  # Write events as formatted JSON
-        return events
-    else:
-        print(f"Failed to access the page. Status code: {response.status_code}")
+    return all_events
 
 def default():
     results = scrape()
