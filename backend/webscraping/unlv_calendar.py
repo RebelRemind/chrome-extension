@@ -1,5 +1,6 @@
 import re
 from datetime import date, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
@@ -7,6 +8,7 @@ from database import BASE
 
 # URL of the UNLV event calendar
 URL = "https://www.unlv.edu/calendar"
+USER_AGENT = {"User-Agent": "Mozilla/5.0"}
 
 INTERESTS = [
     "Arts",
@@ -121,6 +123,7 @@ PHRASE_BONUSES = {
 
 PAST_MONTH_WINDOW_DAYS = 90
 FUTURE_WEEK_BUFFER = 1
+DETAIL_FETCH_WORKERS = 8
 
 
 def normalize_time_label(raw_time):
@@ -138,6 +141,66 @@ def normalize_time_label(raw_time):
     minute = match.group(2) or "00"
     meridiem = match.group(3).upper()
     return f"{hour}:{minute} {meridiem}"
+
+
+def parse_unlv_detail_time(value):
+    cleaned = " ".join((value or "").replace(".", "").split())
+    if not cleaned:
+        return ""
+
+    match = re.search(r"(\d{1,2})(?::(\d{2}))?\s*([ap]m)", cleaned, re.I)
+    if not match:
+        return ""
+
+    hour = int(match.group(1))
+    minute = match.group(2) or "00"
+    meridiem = match.group(3).upper()
+    return f"{hour}:{minute} {meridiem}"
+
+
+def fetch_event_time_range(link):
+    if not link:
+        return {}
+
+    try:
+        response = requests.get(link, headers=USER_AGENT, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException:
+        return {}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    when_heading = soup.find(lambda tag: tag.name in {"h2", "h3", "h4"} and tag.get_text(" ", strip=True) == "When")
+    if when_heading is None:
+        return {}
+
+    value_parts = []
+    sibling = when_heading.find_next_sibling()
+    while sibling is not None:
+        if sibling.name in {"h2", "h3", "h4"}:
+            break
+        text = sibling.get_text(" ", strip=True)
+        if text:
+            value_parts.append(text)
+        sibling = sibling.find_next_sibling()
+
+    when_text = " ".join(value_parts)
+    if not when_text:
+        return {}
+
+    parts = [segment.strip() for segment in when_text.split(" to ", 1)]
+    if len(parts) != 2:
+        return {}
+
+    start_time = parse_unlv_detail_time(parts[0])
+    end_time = parse_unlv_detail_time(parts[1])
+    if not end_time:
+        return {}
+
+    return {
+        "startTime": start_time,
+        "endTime": end_time,
+    }
+
 
 def normalize_text(text):
     return re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower()).strip()
@@ -207,11 +270,14 @@ def parse_events_from_soup(soup):
             continue
         seen.add(dedupe_key)
 
+        normalized_list_time = normalize_time_label(time)
+
         event_data = {
             "name": title,
             "startDate": event_date,
-            "startTime": normalize_time_label(time),
+            "startTime": normalized_list_time,
             "endDate": event_date,
+            "endTime": "",
             "location": location,
             "category": categorize_event(title),
             "link": link,
@@ -221,17 +287,49 @@ def parse_events_from_soup(soup):
     return events
 
 
+def enrich_event_times(events):
+    timed_events = []
+    for event in events:
+        start_time = event.get("startTime", "")
+        if not event.get("link") or not start_time or start_time == "(ALL DAY)":
+            continue
+        timed_events.append(event)
+
+    if not timed_events:
+        return events
+
+    future_to_event = {}
+    with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
+        for event in timed_events:
+            future = executor.submit(fetch_event_time_range, event["link"])
+            future_to_event[future] = event
+
+        for future in as_completed(future_to_event):
+            event = future_to_event[future]
+            try:
+                detail_time_data = future.result()
+            except Exception:
+                detail_time_data = {}
+
+            if detail_time_data.get("startTime"):
+                event["startTime"] = detail_time_data["startTime"]
+            if detail_time_data.get("endTime"):
+                event["endTime"] = detail_time_data["endTime"]
+
+    return events
+
+
 def scrape():
     all_events = []
     seen = set()
 
     for week_url in iter_week_urls():
-        response = requests.get(week_url, headers={"User-Agent": "Mozilla/5.0"})
+        response = requests.get(week_url, headers=USER_AGENT, timeout=15)
         if response.status_code != 200:
             continue
 
         soup = BeautifulSoup(response.text, "html.parser")
-        for event in parse_events_from_soup(soup):
+        for event in enrich_event_times(parse_events_from_soup(soup)):
             dedupe_key = (event["name"], event["startDate"], event["startTime"], event["location"])
             if dedupe_key in seen:
                 continue

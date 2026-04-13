@@ -1,5 +1,6 @@
 import re
 from datetime import date, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,6 +27,7 @@ SPORT_SCHEDULES = {
 }
 PAST_MONTH_WINDOW_DAYS = 90
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
+DETAIL_FETCH_WORKERS = 8
 
 
 def infer_year(month_day_text):
@@ -67,11 +69,141 @@ def normalize_time_label(raw_time):
     return f"{hour}:{minute} {meridiem}"
 
 
+def parse_time_label(raw_time):
+    normalized = normalize_time_label(raw_time)
+    if not normalized or normalized == "(ALL DAY)":
+        return None
+
+    try:
+        return datetime.strptime(normalized, "%I:%M %p")
+    except ValueError:
+        return None
+
+
+def format_time_label(dt_value):
+    if dt_value is None:
+        return ""
+    return dt_value.strftime("%I:%M %p").lstrip("0")
+
+
+def extract_preferred_link(item):
+    links = item.select(".sidearm-schedule-game-links a[href]")
+    if not links:
+        return ""
+
+    best_link = ""
+    for link in links:
+        href = (link.get("href") or "").strip()
+        label = link.get_text(" ", strip=True).lower()
+        href_lower = href.lower()
+        if any(token in href_lower for token in ("/boxscore", "boxscore.aspx", "/stats/")) or "box score" in label:
+            best_link = href
+            break
+        if not best_link:
+            best_link = href
+
+    if not best_link:
+        return ""
+    if best_link.startswith("/"):
+        return f"{BASE_URL}{best_link}"
+    return best_link
+
+
+def compute_end_time_from_duration(start_time, duration_text):
+    start_dt = parse_time_label(start_time)
+    duration_match = re.fullmatch(r"(\d{1,2}):(\d{2})", (duration_text or "").strip())
+    if start_dt is None or duration_match is None:
+        return ""
+
+    hours = int(duration_match.group(1))
+    minutes = int(duration_match.group(2))
+    return format_time_label(start_dt + timedelta(hours=hours, minutes=minutes))
+
+
+def fetch_event_time_range(link, start_time):
+    if not link:
+        return {}
+
+    try:
+        response = requests.get(link, headers=USER_AGENT, timeout=15)
+        response.raise_for_status()
+    except requests.RequestException:
+        return {}
+
+    page_text = BeautifulSoup(response.text, "html.parser").get_text("\n", strip=True)
+
+    explicit_end_match = re.search(
+        r"End of Game:\s*([0-9]{1,2}(?::[0-9]{2})?\s*[AP]M)",
+        page_text,
+        re.I,
+    )
+    if explicit_end_match:
+        return {"endTime": normalize_time_label(explicit_end_match.group(1))}
+
+    start_duration_match = re.search(
+        r"Start\s*([0-9]{1,2}(?::[0-9]{2})?\s*[AP]M)\s*Time\s*([0-9]{1,2}:[0-9]{2})",
+        page_text,
+        re.I,
+    )
+    if start_duration_match:
+        derived_end_time = compute_end_time_from_duration(
+            start_duration_match.group(1),
+            start_duration_match.group(2),
+        )
+        if derived_end_time:
+            return {
+                "startTime": normalize_time_label(start_duration_match.group(1)),
+                "endTime": derived_end_time,
+            }
+
+    duration_match = re.search(r"Duration:\s*([0-9]{1,2}:[0-9]{2})", page_text, re.I)
+    if duration_match:
+        derived_end_time = compute_end_time_from_duration(start_time, duration_match.group(1))
+        if derived_end_time:
+            return {"endTime": derived_end_time}
+
+    return {}
+
+
+def enrich_event_times(events):
+    timed_events = []
+    for event in events:
+        if event.get("link") and event.get("startTime"):
+            timed_events.append(event)
+
+    if not timed_events:
+        return events
+
+    future_to_event = {}
+    with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
+        for event in timed_events:
+            future = executor.submit(
+                fetch_event_time_range,
+                event["link"],
+                event.get("startTime", ""),
+            )
+            future_to_event[future] = event
+
+        for future in as_completed(future_to_event):
+            event = future_to_event[future]
+            try:
+                detail_time_data = future.result()
+            except Exception:
+                detail_time_data = {}
+
+            if detail_time_data.get("startTime"):
+                event["startTime"] = detail_time_data["startTime"]
+            if detail_time_data.get("endTime"):
+                event["endTime"] = detail_time_data["endTime"]
+
+    return events
+
+
 def parse_schedule_item(item, sport):
     date_block = item.select_one(".sidearm-schedule-game-opponent-date")
     opponent_name = item.select_one(".sidearm-schedule-game-opponent-name")
     location = item.select_one(".sidearm-schedule-game-location")
-    recap_link = item.select_one(".sidearm-schedule-game-links a[href]")
+    event_link = extract_preferred_link(item)
 
     if date_block is None or opponent_name is None:
         return None
@@ -95,7 +227,7 @@ def parse_schedule_item(item, sport):
         "endDate": event_date.strftime("%m/%d/%Y"),
         "endTime": "",
         "sport": sport,
-        "link": f"{BASE_URL}{recap_link['href']}" if recap_link and recap_link["href"].startswith("/") else (recap_link["href"] if recap_link else ""),
+        "link": event_link,
         "location": location.get_text(" ", strip=True) if location else "",
     }
 
@@ -107,7 +239,7 @@ def within_window(event):
 
 
 def scrape_schedule_page(sport, url):
-    response = requests.get(url, headers=USER_AGENT)
+    response = requests.get(url, headers=USER_AGENT, timeout=15)
     if response.status_code != 200:
         return []
 
@@ -126,7 +258,7 @@ def scrape_schedule_page(sport, url):
         seen.add(dedupe_key)
         results.append(event)
 
-    return results
+    return enrich_event_times(results)
 
 
 def scrape():
