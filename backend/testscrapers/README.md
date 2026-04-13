@@ -10,6 +10,7 @@ python3 backend/testscrapers/run_calendar_source_checks.py
 
 That command writes:
 
+- `backend/testscrapers/output/academiccalendar_list.json`
 - `backend/testscrapers/output/unlvcalendar_list.json`
 - `backend/testscrapers/output/rebelcoverage_list.json`
 - `backend/testscrapers/output/summary.json`
@@ -20,3 +21,9 @@ That command writes:
 - events with end times
 - events without end times
 - a few sample events
+
+To run just the academic calendar source check:
+
+```bash
+python3 backend/testscrapers/run_academic_calendar_check.py
+```
