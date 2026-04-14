@@ -210,6 +210,38 @@ function CalendarMenu() {
 					);
 				}
 		}
+		else if (event.id === 4) {
+			const eventStart = event.allDay ? "Date:\t\t\t" + ((event.start).toString()).slice(0,15) + '\n' : "Started at:\t" + ((event.start).toString()).slice(0,15) + ", " + (event.start).toLocaleTimeString('en-US', {
+				hour: 'numeric',
+				minute: 'numeric',
+				hour12: 'true'
+				}) + '\n';
+			const eventEnd = event.allDay ? "" : "Ends at:\t\t" + ((event.end).toString()).slice(0,15) + ", " + (event.end).toLocaleTimeString('en-US', {
+				hour: 'numeric',
+				minute: 'numeric',
+				hour12: 'true'
+				}) + '\n';
+			const eventLocation = event.location === undefined ? "" : ("Location:\t\t" + (event.location).toString() + '\n');
+			const eventDesc = event.description === undefined ? "" : ("Description:\t" + (event.description).toString() + '\n');
+			const eventLink = event.link === undefined ? "" : (event.link).toString();
+			
+			setmodalBody(
+				<>
+					<div>{eventStart}</div>
+					{eventEnd ? <div>{eventEnd}</div> : null}
+					<div>{eventLocation}</div>
+					<div>{eventDesc}</div>
+					{eventLink ? (
+						<div style={{ whiteSpace: "normal", wordWrap: "break-word", overflowWrap: "break-word" }}>
+							More Details:&#9;
+							<a href={eventLink} target="_blank" rel="noopener noreferrer">
+								{eventLink}
+							</a>
+						</div>
+					) : null}
+				</>
+			);
+		}
 	};
 
 	/**
@@ -224,7 +256,8 @@ function CalendarMenu() {
 			const userEvents = await getUserEvents();
 			const ICEvents = await getInolvementCenterEvents();
 			const UNLVEvents = await getSavedUNLVEvents();
-			setEvents([ ...canvasAssignments, ...userEvents, ...ICEvents, ...UNLVEvents]);
+			const googleEvents = await getGoogleCalendarEvents();
+			setEvents([ ...canvasAssignments, ...userEvents, ...ICEvents, ...UNLVEvents, ...googleEvents]);
 		};
 		fetchEvents();
 		
@@ -240,7 +273,7 @@ function CalendarMenu() {
  		* Listens for messages indicating that a user created event has been created or updated.
  		*/
 		const handleMessage = (message, sender, sendResponse) => {
-            if (message.type === "EVENT_CREATED" || message.type === "EVENT_UPDATED" || message.type === "UPDATE_ASSIGNMENTS") {
+            if (message.type === "EVENT_CREATED" || message.type === "EVENT_UPDATED" || message.type === "UPDATE_ASSIGNMENTS" || message.type === "GOOGLE_CALENDAR_UPDATED") {
                 fetchEvents();
 				getColors();
 				sendResponse(true);
@@ -403,6 +436,31 @@ const getSavedUNLVEvents = async() => {
 					id: 3
 				}));
 				resolve(UNLVCalendarEvents);
+			}
+			else {
+				resolve([]);
+			}
+		})
+	})
+}
+
+const getGoogleCalendarEvents = async() => {
+	return new Promise ((resolve) => {
+		chrome.storage.local.get("googleCalendarEvents", (data) => {
+			if (data.googleCalendarEvents) {
+				const googleEvents = data.googleCalendarEvents;
+				const importedGoogleEvents = googleEvents.map(event => ({
+					title: event.title,
+					start: (event.startTime === "(ALL DAY)") ? new Date(`${event.startDate}T00:00:00`) : new Date(`${event.startDate}T${event.startTime}:00`),
+					end: (event.endTime === "") ? (event.startTime === "(ALL DAY)") ? new Date(`${event.endDate}T00:00:00`) : new Date(`${event.startDate}T${event.startTime}:00`) : new Date(`${event.endDate}T${event.endTime}:00`),
+					allDay: (event.startTime === "(ALL DAY)"),
+					location: event.location,
+					description: event.desc,
+					link: event.link,
+					eventType: "googleCalendar",
+					id: 4
+				}));
+				resolve(importedGoogleEvents);
 			}
 			else {
 				resolve([]);

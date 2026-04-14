@@ -75,7 +75,8 @@ describe('Calendar View Component', () => {
         { allDay: true, desc: "Study Hard", location: "", endTime: "", startDate: "2025-04-28", startTime: "", title: "Final Exams" }
       ], 
       filteredIC: [{ name: "Monthly Meeting", organization: "Layer Zero", location: "TBE B174", startDate: "2025-05-05", endDate: "2025-05-05", startTime: "5:30 PM", endTime: "7:30 PM"}],
-      savedUNLVEvents: [{ name: "Tech Seminar", location: "CHB A106", startDate: "2025-04-29", startTime: "2:30 PM", endDate: "2025-04-29", endTime: "6:30 PM" }]
+      savedUNLVEvents: [{ name: "Tech Seminar", location: "CHB A106", startDate: "2025-04-29", startTime: "2:30 PM", endDate: "2025-04-29", endTime: "6:30 PM" }],
+      googleCalendarEvents: [{ title: "Doctor Appointment", location: "Clinic", desc: "Annual checkup", startDate: "2025-05-01", endDate: "2025-05-01", startTime: "16:30", endTime: "17:00", link: "https://calendar.google.com/event?eid=1" }]
     }); 
   });
     

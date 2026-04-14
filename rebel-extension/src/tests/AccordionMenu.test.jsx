@@ -79,6 +79,7 @@ global.chrome = {
       set: jest.fn(),
     },
     local: {
+      get: jest.fn((keys, cb) => cb({ savedUNLVEvents: [] })),
       set: jest.fn(),
     },
   },
@@ -112,6 +113,22 @@ jest.mock("../../public/scripts/fetch-events.js", () => ({
       time: e.allDay ? "(ALL DAY)" : "2:00 PM",
       organization: "Your Event",
       link: "ignore",
+    })),
+  normalizeSavedUNLVEvents: (events) =>
+    events.map((e) => ({
+      ...e,
+      name: e.name || "Saved Event",
+      organization: e.organization || "Saved UNLV Event",
+      time: e.startTime || "Time TBD",
+      savedUNLVEvent: true,
+    })),
+  normalizeGoogleCalendarEvents: (events) =>
+    events.map((e) => ({
+      ...e,
+      name: e.title || "Google Calendar Event",
+      organization: "Google Calendar",
+      time: e.startTime || "Time TBD",
+      googleCalendarEvent: true,
     })),
 }));
 

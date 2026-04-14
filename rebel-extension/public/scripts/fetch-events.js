@@ -113,3 +113,37 @@ export function normalizeUserEvents(userEvents) {
     desc: event.desc,
   }));
 }
+
+export function normalizeSavedUNLVEvents(savedEvents) {
+  return savedEvents.map((event, index) => ({
+    id: `saved-unlv-${index}`,
+    name: event.name || "Saved UNLV Event",
+    organization: event.organization || event.category || event.sport || "Saved UNLV Event",
+    time: event.startTime || "Time TBD",
+    startDate: event.startDate,
+    endDate: event.endDate,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    location: event.location,
+    desc: event.description || "",
+    link: event.link || "",
+    savedUNLVEvent: true,
+  }));
+}
+
+export function normalizeGoogleCalendarEvents(googleEvents) {
+  return googleEvents.map((event, index) => ({
+    id: `google-calendar-${event.googleEventId || index}`,
+    name: event.title || "Google Calendar Event",
+    organization: "Google Calendar",
+    time: event.allDay ? "(ALL DAY)" : formatTime(event.startTime),
+    startDate: event.startDate,
+    endDate: event.endDate,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    location: event.location,
+    desc: event.desc,
+    link: event.link || "",
+    googleCalendarEvent: true,
+  }));
+}

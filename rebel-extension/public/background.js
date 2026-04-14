@@ -14,7 +14,7 @@
 import { authenticateUser } from "./scripts/identity-script.js";
 import { getAssignments, getCourses, getCanvasPAT } from "./scripts/canvas-script.js";
 import { openSidePanel } from "./scripts/sidepanel.js";
-import { getGoogleToken, syncCalendar, getCalendarID, getOrCreateCalendar, gatherEvents, checkCalendarExists } from "./scripts/GoogleCalendar.js";
+import { getGoogleToken, syncCalendar, getCalendarID, getOrCreateCalendar, gatherEvents, checkCalendarExists, importGoogleCalendarEvents } from "./scripts/GoogleCalendar.js";
 import { alarmInstall, storageListener, chromeStartUpListener, dailyAlarmListener, onClickNotification} from "./scripts/notifications.js";
 
 const PAGES_BRIDGE_SYNC_KEYS = [
@@ -28,7 +28,7 @@ const PAGES_BRIDGE_SYNC_KEYS = [
   "selectedSports",
 ];
 
-const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents", "colorList"];
+const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents", "googleCalendarEvents", "colorList"];
 
 function parseAssignmentDate(value) {
   if (!value) {
@@ -76,6 +76,32 @@ function parseInvolvementCenterDateTime(event) {
   }
 
   const parsed = new Date(`${event.startDate} ${event.startTime || "12:00 AM"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseSavedCampusEventDateTime(event) {
+  if (!event?.startDate) {
+    return null;
+  }
+
+  if (!event.startTime || event.startTime === "(ALL DAY)") {
+    return new Date(`${event.startDate}T00:00:00`);
+  }
+
+  const parsed = new Date(`${event.startDate} ${event.startTime}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseGoogleCalendarEventDateTime(event) {
+  if (!event?.startDate) {
+    return null;
+  }
+
+  if (!event.startTime || event.startTime === "(ALL DAY)") {
+    return new Date(`${event.startDate}T00:00:00`);
+  }
+
+  const parsed = new Date(`${event.startDate}T${event.startTime}`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -195,8 +221,25 @@ function buildBridgeCalendarEvents(localData) {
         calendarKey: "extensionEvents",
       }))
     : [];
+  const googleCalendarEvents = Array.isArray(localData.googleCalendarEvents)
+    ? localData.googleCalendarEvents.map((event, index) => ({
+        id: `google-${event.googleEventId || event.title || index}-${index}`,
+        title: event.title || "Google Calendar Event",
+        startDate: event.startDate || "",
+        endDate: event.endDate || event.startDate || "",
+        startTime: event.allDay ? "(ALL DAY)" : (event.startTime || ""),
+        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || event.startTime || ""),
+        allDay: Boolean(event.allDay),
+        location: event.location || "",
+        description: event.desc || "",
+        link: event.link || "",
+        sourceLabel: "Google Calendar",
+        eventType: "googleCalendar",
+        calendarKey: "extensionEvents",
+      }))
+    : [];
 
-  return [...canvasEvents, ...userEvents, ...involvementCenterEvents, ...savedCampusEvents];
+  return [...canvasEvents, ...userEvents, ...involvementCenterEvents, ...savedCampusEvents, ...googleCalendarEvents];
 }
 
 function buildPagesBridgePayload(syncData, localData) {
@@ -248,6 +291,26 @@ function buildPagesBridgePayload(syncData, localData) {
         .sort((left, right) => left.parsedStart - right.parsedStart)
         .map(({ parsedStart, ...event }) => event)
     : [];
+  const upcomingSavedCampusEvents = Array.isArray(localData.savedUNLVEvents)
+    ? localData.savedUNLVEvents
+        .map((event) => ({
+          ...event,
+          parsedStart: parseSavedCampusEventDateTime(event),
+        }))
+        .filter((event) => event.parsedStart && event.parsedStart >= today)
+        .sort((left, right) => left.parsedStart - right.parsedStart)
+        .map(({ parsedStart, ...event }) => event)
+    : [];
+  const upcomingGoogleCalendarEvents = Array.isArray(localData.googleCalendarEvents)
+    ? localData.googleCalendarEvents
+        .map((event) => ({
+          ...event,
+          parsedStart: parseGoogleCalendarEventDateTime(event),
+        }))
+        .filter((event) => event.parsedStart && event.parsedStart >= today)
+        .sort((left, right) => left.parsedStart - right.parsedStart)
+        .map(({ parsedStart, ...event }) => event)
+    : [];
 
   const user = syncData.user
     ? {
@@ -268,9 +331,11 @@ function buildPagesBridgePayload(syncData, localData) {
     involvedClubs: Array.isArray(syncData.involvedClubs) ? syncData.involvedClubs : [],
     selectedInterests: Array.isArray(syncData.selectedInterests) ? syncData.selectedInterests : [],
     selectedSports: Array.isArray(syncData.selectedSports) ? syncData.selectedSports : [],
-    userEventCount: upcomingUserEvents.length + upcomingICEvents.length,
+    userEventCount: upcomingUserEvents.length + upcomingICEvents.length + upcomingSavedCampusEvents.length + upcomingGoogleCalendarEvents.length,
     userEvents: upcomingUserEvents,
     involvementCenterEvents: upcomingICEvents,
+    savedUNLVEvents: upcomingSavedCampusEvents,
+    googleCalendarEvents: upcomingGoogleCalendarEvents,
     assignmentCount: Array.isArray(localData.Canvas_Assignments) ? localData.Canvas_Assignments.length : 0,
     upcomingAssignmentCount,
     upcomingAssignments,
@@ -411,6 +476,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log("Preferences saved to storage:", message.preferences);
         sendResponse({ success: true }); // Confirms successful storage update.
       });
+      if (message.preferences?.googleCalendar) {
+        updateGoogleCalendar();
+      } else {
+        chrome.storage.local.set({ googleCalendarEvents: [] }, () => {
+          chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
+            if (chrome.runtime.lastError) {
+              // handle receiving end does not exist error
+            }
+          });
+        });
+      }
       return true;
 
     /**
@@ -536,34 +612,39 @@ async function updateGoogleCalendar() {
       return false;
     }
 
+    const syncAndImport = (calendarID) => {
+      gatherEvents().then((eventList) => {
+        syncCalendar(eventList, GoogleToken, calendarID).then(() => {
+          importGoogleCalendarEvents(GoogleToken).then(() => {
+            chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
+              if (chrome.runtime.lastError) {
+                // handle receiving end does not exist error
+              }
+            });
+          });
+        });
+      });
+    };
+
     getCalendarID().then((storedCalendarID) => {
       if (!storedCalendarID) {
         getOrCreateCalendar(GoogleToken).then((newCalendarID) => {
-          // do work with newcalendar
-          gatherEvents().then((eventList) => {
-            syncCalendar(eventList, GoogleToken, newCalendarID);
-          })
-        })
+          syncAndImport(newCalendarID);
+        });
       }
       else {
         checkCalendarExists(GoogleToken, storedCalendarID).then((result) => {
           if (!result) {
             getOrCreateCalendar(GoogleToken).then((newCalendarID) => {
-              // do work with newcalendar
-              gatherEvents().then((eventList) => {
-                syncCalendar(eventList, GoogleToken, newCalendarID);
-              })
-            })
+              syncAndImport(newCalendarID);
+            });
           }
           else {
-            // do work with storedcalendar
-            gatherEvents().then((eventList) => {
-              syncCalendar(eventList, GoogleToken, storedCalendarID);
-            })
+            syncAndImport(storedCalendarID);
           }
-        })
+        });
       }
-    })
+    });
   });
 }
 

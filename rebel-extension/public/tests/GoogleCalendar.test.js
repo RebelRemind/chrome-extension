@@ -12,7 +12,7 @@
  * Authored by: Gunnar Dalton
  */
 
-import { getGoogleToken, getCalendarID, checkCalendarExists, getOrCreateCalendar, gatherEvents, eventHash, addOrUpdateEvents, getExistingEvents, deleteEvent, syncCalendar,  } from "../scripts/GoogleCalendar";
+import { getGoogleToken, getCalendarID, checkCalendarExists, getOrCreateCalendar, gatherEvents, eventHash, addOrUpdateEvents, getExistingEvents, deleteEvent, syncCalendar, importGoogleCalendarEvents } from "../scripts/GoogleCalendar";
 
 beforeEach(() => {
     jest.clearAllMocks(); // Clear mocks between tests
@@ -338,6 +338,46 @@ describe("syncCalendar", () => {
 
         await syncCalendar(testEvents, "test_token", "test_calendarID");
         expect(fetch).toHaveBeenCalledTimes(6);
+    });
+});
+
+describe("importGoogleCalendarEvents", () => {
+    test("imports non-Rebel-Remind Google Calendar events into local storage", async() => {
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: async() => ({
+                items: [
+                    {
+                        id: "google-1",
+                        summary: "Doctor Appointment",
+                        description: "Annual checkup",
+                        location: "Clinic",
+                        htmlLink: "https://calendar.google.com/event?eid=1",
+                        start: { dateTime: "2026-04-15T16:30:00Z" },
+                        end: { dateTime: "2026-04-15T17:00:00Z" },
+                    },
+                    {
+                        id: "rr-managed",
+                        summary: "Rebel Remind Event",
+                        start: { dateTime: "2026-04-16T16:30:00Z" },
+                        end: { dateTime: "2026-04-16T17:00:00Z" },
+                        extendedProperties: { private: { managedBy: "Rebel Remind" } }
+                    }
+                ]
+            })
+        });
+
+        const result = await importGoogleCalendarEvents("test_token");
+
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+            title: "Doctor Appointment",
+            desc: "Annual checkup",
+            location: "Clinic",
+            link: "https://calendar.google.com/event?eid=1",
+            googleEventId: "google-1",
+        });
+        expect(chrome.storage.local.set).toHaveBeenCalledWith({ googleCalendarEvents: result }, expect.any(Function));
     });
 });
 // describe("getAssignments", () => {

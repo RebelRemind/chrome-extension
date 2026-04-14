@@ -17,6 +17,8 @@ import "./css/UserEvents.css";
  */
 const UserEventList = () => {
     const [userEvents, setUserEvents] = useState([]);
+    const [savedCampusEvents, setSavedCampusEvents] = useState([]);
+    const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
     const [expandedEventKey, setExpandedEventKey] = useState(null); // Tracks expanded dropdown
     const [activeTab, setActiveTab] = useState("upcoming"); // "upcoming" or "past"
     const [editingKey, setEditingKey] = useState(null); // Currently editing dropdown
@@ -28,17 +30,17 @@ const UserEventList = () => {
      */
     useEffect(() => {
         const loadEvents = () => {
-            chrome.storage.local.get("userEvents", (data) => {
-                if (Array.isArray(data["userEvents"])) {
-                    setUserEvents(data["userEvents"]);
-                }
+            chrome.storage.local.get(["userEvents", "savedUNLVEvents", "googleCalendarEvents"], (data) => {
+                setUserEvents(Array.isArray(data["userEvents"]) ? data["userEvents"] : []);
+                setSavedCampusEvents(Array.isArray(data["savedUNLVEvents"]) ? data["savedUNLVEvents"] : []);
+                setGoogleCalendarEvents(Array.isArray(data["googleCalendarEvents"]) ? data["googleCalendarEvents"] : []);
             });
         };
 
         loadEvents();
 
         const handleMessage = (message) => {
-            if (message.type === "EVENT_CREATED") {
+            if (message.type === "EVENT_CREATED" || message.type === "EVENT_UPDATED" || message.type === "GOOGLE_CALENDAR_UPDATED") {
                 console.log("🔁 Reloading from background after event update...");
                 loadEvents();
             }
@@ -60,6 +62,20 @@ const UserEventList = () => {
         });
     };
 
+    const handleDeleteSavedCampusEvent = (eventToDelete) => {
+        const updatedEvents = savedCampusEvents.filter((event) => !(
+            event.name === eventToDelete.name
+            && event.startDate === eventToDelete.startDate
+            && event.startTime === eventToDelete.startTime
+        ));
+
+        chrome.storage.local.set({ "savedUNLVEvents": updatedEvents }, () => {
+            setSavedCampusEvents(updatedEvents);
+            setExpandedEventKey(null);
+            chrome.runtime.sendMessage({ type: "EVENT_UPDATED" });
+        });
+    };
+
     /**
      * Expands or collapses a given event's dropdown.
      */
@@ -72,6 +88,8 @@ const UserEventList = () => {
      */
     const formatTime12hr = (timeString) => {
         if (!timeString) return "";
+        if (timeString === "(ALL DAY)") return "All-day";
+        if (/[AP]M/i.test(timeString)) return timeString;
         const [hour, minute] = timeString.split(":").map(Number);
         const ampm = hour >= 12 ? "pm" : "am";
         const hr = hour % 12 || 12;
@@ -103,6 +121,17 @@ const UserEventList = () => {
      * Returns a Date object for the event including time if available.
      */
     const getEventDateTime = (event) => {
+        if (!event?.startDate) {
+            return new Date(0);
+        }
+
+        if (event.startTime && /[AP]M/i.test(event.startTime)) {
+            const parsed = new Date(`${event.startDate} ${event.startTime}`);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+
         const date = parseDateLocal(event.startDate);
         if (!event.allDay && event.startTime) {
             const [h, m] = event.startTime.split(":").map(Number);
@@ -140,6 +169,12 @@ const UserEventList = () => {
     const todayEvents = userEvents.filter(isToday).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
     const upcomingEvents = userEvents.filter(isFuture).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
     const pastEvents = userEvents.filter(isPast).sort((a, b) => getEventDateTime(b) - getEventDateTime(a));
+    const todaySavedCampusEvents = savedCampusEvents.filter(isToday).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
+    const upcomingSavedCampusEvents = savedCampusEvents.filter(isFuture).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
+    const pastSavedCampusEvents = savedCampusEvents.filter(isPast).sort((a, b) => getEventDateTime(b) - getEventDateTime(a));
+    const todayGoogleCalendarEvents = googleCalendarEvents.filter(isToday).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
+    const upcomingGoogleCalendarEvents = googleCalendarEvents.filter(isFuture).sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
+    const pastGoogleCalendarEvents = googleCalendarEvents.filter(isPast).sort((a, b) => getEventDateTime(b) - getEventDateTime(a));
 
     /**
      * Validates and saves an event after it's been edited.
@@ -194,7 +229,7 @@ const UserEventList = () => {
                         <span className="dropdown-icon">
                             {expandedEventKey === eventKey ? "▲" : "▼"}
                         </span>
-                        <span>{event.title}</span>
+                        <span>{`Custom Event: ${event.title}`}</span>
                     </div>
                     <button
                         className="delete-btn"
@@ -295,9 +330,86 @@ const UserEventList = () => {
         );
     };
 
+    const renderSavedCampusEvent = (event, index, section) => {
+        const eventKey = `${section}-saved-${index}`;
+
+        return (
+            <li key={eventKey} className="event-dropdown-item">
+                <div className="event-dropdown-header" onClick={() => toggleExpand(eventKey)}>
+                    <div className="dropdown-title">
+                        <span className="dropdown-icon">
+                            {expandedEventKey === eventKey ? "▲" : "▼"}
+                        </span>
+                        <span>{event.name}</span>
+                    </div>
+                    <button
+                        className="delete-btn"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSavedCampusEvent(event);
+                        }}
+                    >
+                        Remove
+                    </button>
+                </div>
+
+                {expandedEventKey === eventKey && (
+                    <div className="event-dropdown-details">
+                        <p><strong>Source:</strong> {event.organization || event.category || event.sport || "UNLV Event"}</p>
+                        <p><strong>Date:</strong> {formatDate(event.startDate) || "N/A"}</p>
+                        <p><strong>Time:</strong> {event.startTime === "(ALL DAY)" ? "All-day" : `${formatTime12hr(event.startTime)}${event.endTime ? ` - ${formatTime12hr(event.endTime)}` : ""}`}</p>
+                        <p><strong>Location:</strong> {event.location || "N/A"}</p>
+                        <p><strong>Description:</strong> {event.description || event.category || event.sport || "Saved from UNLV Events."}</p>
+                        {event.link ? (
+                            <p>
+                                <a href={event.link} target="_blank" rel="noreferrer">
+                                    Open Event
+                                </a>
+                            </p>
+                        ) : null}
+                    </div>
+                )}
+            </li>
+        );
+    };
+
+    const renderGoogleCalendarEvent = (event, index, section) => {
+        const eventKey = `${section}-google-${index}`;
+
+        return (
+            <li key={eventKey} className="event-dropdown-item">
+                <div className="event-dropdown-header" onClick={() => toggleExpand(eventKey)}>
+                    <div className="dropdown-title">
+                        <span className="dropdown-icon">
+                            {expandedEventKey === eventKey ? "▲" : "▼"}
+                        </span>
+                        <span>{event.title}</span>
+                    </div>
+                </div>
+
+                {expandedEventKey === eventKey && (
+                    <div className="event-dropdown-details">
+                        <p><strong>Source:</strong> Google Calendar</p>
+                        <p><strong>Date:</strong> {formatDate(event.startDate) || "N/A"}</p>
+                        <p><strong>Time:</strong> {event.startTime === "(ALL DAY)" ? "All-day" : `${formatTime12hr(event.startTime)}${event.endTime ? ` - ${formatTime12hr(event.endTime)}` : ""}`}</p>
+                        <p><strong>Location:</strong> {event.location || "N/A"}</p>
+                        <p><strong>Description:</strong> {event.desc || "No description."}</p>
+                        {event.link ? (
+                            <p>
+                                <a href={event.link} target="_blank" rel="noreferrer">
+                                    Open Event
+                                </a>
+                            </p>
+                        ) : null}
+                    </div>
+                )}
+            </li>
+        );
+    };
+
     return (
         <div className="mx-auto bg-white rounded shadow-md text-left" style={{ padding: "10px", marginTop: "10px" }}>
-            <h3 className="text-xl font-semibold mb-2" style={{ marginTop: "10px" }}>Your Custom Events</h3>
+            <h3 className="text-xl font-semibold mb-2" style={{ marginTop: "10px" }}>Your Events</h3>
 
             {/* Tab Switcher */}
             <div className="tab-nav">
@@ -310,14 +422,38 @@ const UserEventList = () => {
                 <>
                     {todayEvents.length > 0 && (
                         <>
-                            <h4 className="event-subheader mb-2">Today</h4>
+                            <h4 className="event-subheader mb-2">Today: Custom Events</h4>
                             <ul className="event-list">{todayEvents.map((event, index) => renderEvent(event, index, "today"))}</ul>
                         </>
                     )}
                     {upcomingEvents.length > 0 && (
                         <>
-                            <h4 className="event-subheader mt-4 mb-2">Upcoming</h4>
+                            <h4 className="event-subheader mt-4 mb-2">Upcoming: Custom Events</h4>
                             <ul className="event-list">{upcomingEvents.map((event, index) => renderEvent(event, index, "upcoming"))}</ul>
+                        </>
+                    )}
+                    {todaySavedCampusEvents.length > 0 && (
+                        <>
+                            <h4 className="event-subheader mt-4 mb-2">Today: Saved UNLV Events</h4>
+                            <ul className="event-list">{todaySavedCampusEvents.map((event, index) => renderSavedCampusEvent(event, index, "today"))}</ul>
+                        </>
+                    )}
+                    {upcomingSavedCampusEvents.length > 0 && (
+                        <>
+                            <h4 className="event-subheader mt-4 mb-2">Upcoming: Saved UNLV Events</h4>
+                            <ul className="event-list">{upcomingSavedCampusEvents.map((event, index) => renderSavedCampusEvent(event, index, "upcoming"))}</ul>
+                        </>
+                    )}
+                    {todayGoogleCalendarEvents.length > 0 && (
+                        <>
+                            <h4 className="event-subheader mt-4 mb-2">Today: Google Calendar</h4>
+                            <ul className="event-list">{todayGoogleCalendarEvents.map((event, index) => renderGoogleCalendarEvent(event, index, "today"))}</ul>
+                        </>
+                    )}
+                    {upcomingGoogleCalendarEvents.length > 0 && (
+                        <>
+                            <h4 className="event-subheader mt-4 mb-2">Upcoming: Google Calendar</h4>
+                            <ul className="event-list">{upcomingGoogleCalendarEvents.map((event, index) => renderGoogleCalendarEvent(event, index, "upcoming"))}</ul>
                         </>
                     )}
                 </>
@@ -328,6 +464,12 @@ const UserEventList = () => {
                 <>
                     <h4 className="event-subheader mt-4 mb-2">All Past Events</h4>
                     <ul className="event-list">{pastEvents.map((event, index) => renderEvent(event, index, "past"))}</ul>
+                    {pastSavedCampusEvents.length > 0 ? (
+                        <ul className="event-list">{pastSavedCampusEvents.map((event, index) => renderSavedCampusEvent(event, index, "past"))}</ul>
+                    ) : null}
+                    {pastGoogleCalendarEvents.length > 0 ? (
+                        <ul className="event-list">{pastGoogleCalendarEvents.map((event, index) => renderGoogleCalendarEvent(event, index, "past"))}</ul>
+                    ) : null}
                 </>
             )}
         </div>

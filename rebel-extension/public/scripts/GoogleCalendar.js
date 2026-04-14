@@ -284,6 +284,92 @@ export async function getExistingEvents(token, calendarID) {
     }
 }
 
+function formatGoogleCalendarStorageDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatGoogleCalendarStorageTime(date) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function normalizeGoogleCalendarEvent(item) {
+    if (!item?.start) {
+        return null;
+    }
+
+    if (item.start.date) {
+        const startDate = new Date(`${item.start.date}T00:00:00`);
+        if (Number.isNaN(startDate.getTime())) {
+            return null;
+        }
+
+        const exclusiveEndDate = item.end?.date ? new Date(`${item.end.date}T00:00:00`) : new Date(startDate);
+        const inclusiveEndDate = new Date(exclusiveEndDate);
+        inclusiveEndDate.setDate(inclusiveEndDate.getDate() - 1);
+
+        return {
+            title: item.summary || "Untitled Google Event",
+            startDate: formatGoogleCalendarStorageDate(startDate),
+            endDate: formatGoogleCalendarStorageDate(inclusiveEndDate),
+            startTime: "(ALL DAY)",
+            endTime: "",
+            allDay: true,
+            location: item.location || "",
+            desc: item.description || "",
+            link: item.htmlLink || "",
+            googleEventId: item.id || "",
+        };
+    }
+
+    if (item.start.dateTime) {
+        const startDateTime = new Date(item.start.dateTime);
+        const endDateTime = item.end?.dateTime ? new Date(item.end.dateTime) : new Date(startDateTime);
+        if (Number.isNaN(startDateTime.getTime()) || Number.isNaN(endDateTime.getTime())) {
+            return null;
+        }
+
+        return {
+            title: item.summary || "Untitled Google Event",
+            startDate: formatGoogleCalendarStorageDate(startDateTime),
+            endDate: formatGoogleCalendarStorageDate(endDateTime),
+            startTime: formatGoogleCalendarStorageTime(startDateTime),
+            endTime: formatGoogleCalendarStorageTime(endDateTime),
+            allDay: false,
+            location: item.location || "",
+            desc: item.description || "",
+            link: item.htmlLink || "",
+            googleEventId: item.id || "",
+        };
+    }
+
+    return null;
+}
+
+export async function importGoogleCalendarEvents(token) {
+    const timeMin = new Date();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=2500&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin.toISOString())}`;
+    const response = await fetch(url, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        }
+    });
+
+    const payload = await response.json();
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const importedEvents = items
+        .filter((event) => event.status !== "cancelled")
+        .filter((event) => event.extendedProperties?.private?.managedBy !== "Rebel Remind")
+        .map(normalizeGoogleCalendarEvent)
+        .filter(Boolean);
+
+    await new Promise((resolve) => {
+        chrome.storage.local.set({ googleCalendarEvents: importedEvents }, () => resolve());
+    });
+
+    return importedEvents;
+}
+
 /**
  * Delete any event from the calendar that is no longer found in Rebel Remind.
  */

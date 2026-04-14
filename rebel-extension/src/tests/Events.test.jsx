@@ -181,10 +181,30 @@ describe('Events component', () => {
       />
     );
   
-    const eventLink = screen.getByText('Custom Meetup').closest('a');
+    const eventLink = screen.getByText('Custom Event: Custom Meetup').closest('a');
     fireEvent.click(eventLink);
   
     expect(setActiveEventPopup).toHaveBeenCalledWith(mockEvent);
+  });
+
+  it('prefixes custom events with Custom Event', () => {
+    const mockEvent = {
+      id: 11,
+      name: 'Study Group',
+      time: '7:00 PM',
+      organization: 'Your Event',
+      startDate: '2025-04-22',
+      startTime: '7:00 PM',
+      link: 'customEvent',
+    };
+
+    global.chrome.storage.local.get.mockImplementation((key, callback) => {
+      callback({ savedUNLVEvents: [] });
+    });
+
+    render(<Events events={[mockEvent]} viewMode="daily" setActiveEventPopup={jest.fn()} />);
+
+    expect(screen.getByText('Custom Event: Study Group')).toBeInTheDocument();
   });
   
   

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { subscribeToUserEvents, normalizeUserEvents } from "../../public/scripts/fetch-events.js";
+import { subscribeToUserEvents, normalizeGoogleCalendarEvents, normalizeSavedUNLVEvents, normalizeUserEvents } from "../../public/scripts/fetch-events.js";
 import { filterEvents } from "../../public/scripts/filter-events";
 import UserEventPopup from "./UserEventPopup";
 
@@ -18,7 +18,7 @@ import calIcon from "../assets/calIcon.png";
  * This component renders the main collapsible menu for the Rebel Remind popup UI.
  * It uses React Bootstrap's Accordion to show three dynamic sections:
  *  - 📚 Upcoming Assignments (Canvas assignments)
- *  - 📅 Your Events (Involvement Center + custom user events)
+ *  - 📅 Your Events (saved UNLV events, Involvement Center, and custom user events)
  *  - 🎉 UNLV Events (Union, Academic, and Rec Center events)
  *
  * Features:
@@ -49,6 +49,10 @@ function AccordionMenu() {
 
   const [user_events, setUserEvents] = useState([]);
   const [normalizedUserEvents, setNormUserEvents] = useState([]);
+  const [savedCampusEvents, setSavedCampusEvents] = useState([]);
+  const [normalizedSavedCampusEvents, setNormalizedSavedCampusEvents] = useState([]);
+  const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
+  const [normalizedGoogleCalendarEvents, setNormalizedGoogleCalendarEvents] = useState([]);
   const [activeEventPopup, setActiveEventPopup] = useState(null);
   const popupRef = useRef(null);
 
@@ -99,6 +103,26 @@ function AccordionMenu() {
       return unsubscribe;
     }, []);
 
+    useEffect(() => {
+      const loadSavedCampusEvents = () => {
+        chrome.storage.local.get(["savedUNLVEvents", "googleCalendarEvents"], (data) => {
+          setSavedCampusEvents(Array.isArray(data.savedUNLVEvents) ? data.savedUNLVEvents : []);
+          setGoogleCalendarEvents(Array.isArray(data.googleCalendarEvents) ? data.googleCalendarEvents : []);
+        });
+      };
+
+      loadSavedCampusEvents();
+
+      const handleMessage = (message) => {
+        if (message.type === "EVENT_UPDATED" || message.type === "EVENT_CREATED" || message.type === "GOOGLE_CALENDAR_UPDATED") {
+          loadSavedCampusEvents();
+        }
+      };
+
+      chrome.runtime.onMessage.addListener(handleMessage);
+      return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    }, []);
+
     // filter User Events by daily or weekly (brought back, was overwritten)
     function filterUserEvents(events, viewMode) {
       const today = new Date();
@@ -126,6 +150,18 @@ function AccordionMenu() {
       const filtered = filterUserEvents(normalized, viewMode);
       setNormUserEvents(filtered);
     }, [user_events, viewMode]);
+
+    useEffect(() => {
+      const normalized = normalizeSavedUNLVEvents(savedCampusEvents);
+      const filtered = filterUserEvents(normalized, viewMode);
+      setNormalizedSavedCampusEvents(filtered);
+    }, [savedCampusEvents, viewMode]);
+
+    useEffect(() => {
+      const normalized = normalizeGoogleCalendarEvents(googleCalendarEvents);
+      const filtered = filterUserEvents(normalized, viewMode);
+      setNormalizedGoogleCalendarEvents(filtered);
+    }, [googleCalendarEvents, viewMode]);
 
     // if user event is clicked
     useEffect(() => {
@@ -248,7 +284,7 @@ function AccordionMenu() {
                   >
 
                     {index === 0 && <CanvasAssignments viewMode={viewMode} />}
-                    {index === 1 && <Events events={[...filteredIC, ...normalizedUserEvents]} viewMode={viewMode} setActiveEventPopup={setActiveEventPopup} yourEvents={true}/>}
+                    {index === 1 && <Events events={[...filteredIC, ...normalizedSavedCampusEvents, ...normalizedGoogleCalendarEvents, ...normalizedUserEvents]} viewMode={viewMode} setActiveEventPopup={setActiveEventPopup} yourEvents={true}/>}
                     {index === 2 && <Events events={[
                       ...(Array.isArray(filteredUC) ? filteredUC : []),
                       ...(Array.isArray(filteredAC) ? filteredAC.map(event => ({ ...event, academicCalendar: true })) : []),

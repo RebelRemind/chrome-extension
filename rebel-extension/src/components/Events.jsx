@@ -9,6 +9,14 @@ function Events({ events, viewMode, setActiveEventPopup = null , yourEvents = fa
 
   const [localEvents, setLocalEvents] = useState(events);
 
+  const getEventDisplayName = (event) => {
+    if (event.link === "customEvent") {
+      return `Custom Event: ${event.name}`;
+    }
+
+    return event.name;
+  };
+
   useEffect(() => {
     const updateWithStorage = () => {
       chrome.storage.local.get("savedUNLVEvents", (data) => {
@@ -139,7 +147,7 @@ function handleRemoveEvent(event) {
                           {event.organization}
                           {event.organization ? ':' : ''}{" "}
                         </span>
-                        {event.name}
+                        {getEventDisplayName(event)}
                       </span>
                       </a>
                       <span className="event-time">{event.time /* NOT startTime (unformatted) */}</span> 
@@ -151,18 +159,18 @@ function handleRemoveEvent(event) {
                     rel="noopener noreferrer"
                     className="event-link"
                   >
-                    <span className="event-name">
-                      <span className="event-org">
-                        {event.organization}
-                        {event.organization ? ':' : ''}{" "}
-                      </span>
-                      {event.name}
+                      <span className="event-name">
+                        <span className="event-org">
+                          {event.organization}
+                          {event.organization ? ':' : ''}{" "}
+                        </span>
+                      {getEventDisplayName(event)}
                     </span>
                     </a>
                     <span className="event-time">{event.startTime}
-                    {!yourEvents && (
+                    {(!yourEvents || event.savedUNLVEvent) && (
                       <div className="tooltip-container">
-                      {!event.added ? (
+                      {!event.savedUNLVEvent && !event.added ? (
                         // Show Add to Calendar
                         <button
                           className="addCalbtn"
@@ -183,7 +191,7 @@ function handleRemoveEvent(event) {
                       )}
                       {/* Tooltip text */}
                       <span className="tooltip-text">
-                        {!event.added ? "Add to Calendar" : "Remove from Calendar"}
+                        {!event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
                       </span>
                     </div>                    
                     )}
@@ -231,7 +239,7 @@ function handleRemoveEvent(event) {
                     {event.organization}
                     {event.organization ? ':' : ''}{" "}
                   </span>
-                  {event.name}
+                  {getEventDisplayName(event)}
                 </span>
                 </a>
                 <span className="event-time">{event.time}</span>
@@ -248,13 +256,13 @@ function handleRemoveEvent(event) {
                   {event.organization}
                   {event.organization ? ':' : ''}{" "}
                 </span>
-                {event.name}
+                {getEventDisplayName(event)}
               </span>
               </a>
               <span className="event-time">{event.startTime}
-              {!yourEvents && (
+              {(!yourEvents || event.savedUNLVEvent) && (
                 <div className="tooltip-container">
-                {!event.added ? (
+                {!event.savedUNLVEvent && !event.added ? (
                   // Show Add to Calendar
                   <button
                     className="addCalbtn"
@@ -275,7 +283,7 @@ function handleRemoveEvent(event) {
                 )}
                 {/* Tooltip text */}
                 <span className="tooltip-text">
-                  {!event.added ? "Add to Calendar" : "Remove from Calendar"}
+                  {!event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
                 </span>
               </div>              
               )}
