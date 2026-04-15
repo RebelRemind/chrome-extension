@@ -30,6 +30,36 @@ const PAGES_BRIDGE_SYNC_KEYS = [
 
 const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents", "googleCalendarEvents", "colorList"];
 
+function parseFlexibleTimeParts(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  const twentyFourHourMatch = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFourHourMatch) {
+    const hours = Number.parseInt(twentyFourHourMatch[1], 10);
+    const minutes = Number.parseInt(twentyFourHourMatch[2], 10);
+    if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+      return { hours, minutes };
+    }
+  }
+
+  const amPmMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*([AP]M)$/);
+  if (!amPmMatch) {
+    return null;
+  }
+
+  let hours = Number.parseInt(amPmMatch[1], 10);
+  const minutes = Number.parseInt(amPmMatch[2] || "0", 10);
+  const meridiem = amPmMatch[3];
+
+  if (hours === 12) {
+    hours = 0;
+  }
+  if (meridiem === "PM") {
+    hours += 12;
+  }
+
+  return { hours, minutes };
+}
+
 function parseAssignmentDate(value) {
   if (!value) {
     return null;
@@ -61,8 +91,16 @@ function parseUserEventDateTime(event) {
   const parsed = new Date(year, month - 1, day);
 
   if (!event.allDay && event.startTime) {
-    const [hours, minutes] = event.startTime.split(":").map(Number);
-    parsed.setHours(hours || 0, minutes || 0, 0, 0);
+    const timeParts = parseFlexibleTimeParts(event.startTime);
+    if (timeParts) {
+      parsed.setHours(timeParts.hours, timeParts.minutes, 0, 0);
+    } else {
+      const fallback = new Date(`${event.startDate} ${event.startTime}`);
+      if (!Number.isNaN(fallback.getTime())) {
+        return fallback;
+      }
+      parsed.setHours(0, 0, 0, 0);
+    }
   } else {
     parsed.setHours(0, 0, 0, 0);
   }
@@ -128,6 +166,32 @@ function toBridgeTime(parsedDate) {
   });
 }
 
+function buildBridgeFallbackEndTime(startDate, startTime, allDay = false) {
+  if (allDay || !startDate || !startTime || startTime === "(ALL DAY)") {
+    return allDay ? "(ALL DAY)" : "";
+  }
+
+  const timeParts = parseFlexibleTimeParts(startTime);
+  if (!timeParts) {
+    const parsed = new Date(`${startDate} ${startTime}`);
+    if (Number.isNaN(parsed.getTime())) {
+      return "";
+    }
+
+    parsed.setHours(parsed.getHours() + 1);
+    return toBridgeTime(parsed);
+  }
+
+  const [year, month, day] = startDate.split("-").map(Number);
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  const parsed = new Date(year, month - 1, day, timeParts.hours, timeParts.minutes, 0, 0);
+  parsed.setHours(parsed.getHours() + 1);
+  return toBridgeTime(parsed);
+}
+
 function getSavedEventSourceLabel(event) {
   if (event?.sport) {
     return "Rebel Sports";
@@ -175,7 +239,7 @@ function buildBridgeCalendarEvents(localData) {
         startDate: event.startDate || "",
         endDate: event.endDate || event.startDate || "",
         startTime: event.allDay ? "(ALL DAY)" : (event.startTime || ""),
-        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || event.startTime || ""),
+        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || ""),
         allDay: Boolean(event.allDay),
         location: event.location || "",
         description: event.desc || "",
@@ -193,7 +257,7 @@ function buildBridgeCalendarEvents(localData) {
         startDate: event.startDate || "",
         endDate: event.endDate || event.startDate || "",
         startTime: event.startTime || "",
-        endTime: event.endTime || event.startTime || "",
+        endTime: event.endTime || "",
         allDay: event.startTime === "(ALL DAY)",
         location: event.location || "",
         description: event.organization ? `RSO: ${event.organization}` : "",
@@ -207,14 +271,14 @@ function buildBridgeCalendarEvents(localData) {
   const savedCampusEvents = Array.isArray(localData.savedUNLVEvents)
     ? localData.savedUNLVEvents.map((event, index) => ({
         id: `saved-${event.name || "event"}-${event.startDate || index}-${index}`,
-        title: event.name || "Saved Campus Event",
+        title: event.sport && event.name ? `${event.sport}: ${event.name}` : (event.name || "Saved Campus Event"),
         startDate: event.startDate || "",
         endDate: event.endDate || event.startDate || "",
         startTime: event.startTime || "",
-        endTime: event.endTime || event.startTime || "",
+        endTime: event.endTime || buildBridgeFallbackEndTime(event.startDate, event.startTime, event.startTime === "(ALL DAY)"),
         allDay: event.startTime === "(ALL DAY)",
         location: event.location || "",
-        description: event.organization || event.category || event.sport || "",
+        description: event.sport || event.organization || event.category || "",
         link: event.link || "",
         sourceLabel: getSavedEventSourceLabel(event),
         eventType: "UNLVEvents",
@@ -228,7 +292,7 @@ function buildBridgeCalendarEvents(localData) {
         startDate: event.startDate || "",
         endDate: event.endDate || event.startDate || "",
         startTime: event.allDay ? "(ALL DAY)" : (event.startTime || ""),
-        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || event.startTime || ""),
+        endTime: event.allDay ? "(ALL DAY)" : (event.endTime || ""),
         allDay: Boolean(event.allDay),
         location: event.location || "",
         description: event.desc || "",
