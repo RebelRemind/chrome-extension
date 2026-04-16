@@ -49,6 +49,7 @@ def test_normalize_rebel_coverage_converts_us_date():
 
 def test_normalize_unlv_calendar_converts_verbose_date():
     result = normalize_unlv_calendar(
-        [{"name": "Tech Seminar", "startDate": "Tuesday, April 29, 2025", "category": "Tech"}]
+        [{"name": "Tech Seminar", "startDate": "Tuesday, April 29, 2025", "category": "Tech", "description": "AI workshop"}]
     )
     assert result[0]["startDate"] == "2025-04-29"
+    assert result[0]["description"] == "AI workshop"

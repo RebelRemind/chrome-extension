@@ -28,7 +28,9 @@ CATEGORY_KEYWORDS = {
         "art", "arts", "artist", "gallery", "exhibit", "exhibition", "museum",
         "music", "concert", "band", "orchestra", "choir", "theater", "theatre",
         "film", "cinema", "screening", "dance", "poetry", "creative", "design",
-        "fashion", "performance", "visual", "craft",
+        "fashion", "performance", "visual", "craft", "jazz", "broadcast", "radio",
+        "podcasting", "podcast", "recording", "editing", "audio", "recital",
+        "guitar", "mic",
     },
     "Academics": {
         "academic", "academics", "class", "classes", "course", "courses", "study",
@@ -37,6 +39,11 @@ CATEGORY_KEYWORDS = {
         "advising", "tutoring", "curriculum", "faculty", "scholar", "learning",
         "dissertation", "thesis", "defense", "defenses", "presentation",
         "presentations", "library", "student", "graduate", "grad", "literacy",
+        "teaching", "webcampus", "gis", "geographic", "information", "systems",
+        "bootcamp", "training", "doctor", "doctoral", "policy", "bsn", "nursing",
+        "licensure", "proposal", "proposals", "publishing", "publish", "tenure",
+        "promotion", "forum", "summit", "education", "mentor", "mentoring",
+        "proseminar", "anthropology", "open", "house",
     },
     "Career": {
         "career", "careers", "resume", "interview", "networking", "employer",
@@ -44,49 +51,60 @@ CATEGORY_KEYWORDS = {
         "recruitment", "professional", "professionals", "leadership",
         "entrepreneur", "entrepreneurship", "linkedin", "business", "workforce",
         "readiness", "representative", "visit", "postgraduate", "post-graduate",
-        "finance", "financial", "aid",
+        "finance", "financial", "aid", "tax", "retire", "retirement", "withholding",
+        "application", "applying",
     },
     "Culture": {
         "culture", "cultural", "heritage", "language", "tradition", "traditions",
         "global", "international", "multicultural", "festival", "celebration",
-        "history", "diaspora", "filipino", "chinese", "medicine",
+        "history", "diaspora", "filipino", "chinese", "medicine", "lunar",
+        "medieval", "market", "newman",
     },
     "Diversity": {
         "diversity", "equity", "inclusion", "inclusive", "belonging", "identity",
         "identities", "justice", "advocacy", "allyship", "intersectionality",
         "women", "latinx", "hispanic", "black", "asian", "pacific", "indigenous",
         "lgbt", "lgbtq", "pride", "disability", "accessibility", "queer",
-        "veteran", "veterans", "generation", "first-generation",
+        "veteran", "veterans", "generation", "first-generation", "urm",
+        "sorority", "fraternity",
     },
     "Health": {
         "health", "wellness", "mental", "mindfulness", "fitness", "exercise",
         "workout", "nutrition", "therapy", "counseling", "self-care", "yoga",
         "meditation", "medical", "clinic", "stress", "recovery", "sleep",
         "blood", "cpr", "aed", "first", "aid", "grounding", "centering",
-        "breath", "care",
+        "breath", "care", "pilates", "adaptive", "perfectionist", "anxiety",
+        "depression", "aromatherapy", "eating", "narcan", "calm", "mood",
+        "boosting", "coping",
     },
     "Social": {
         "social", "mixer", "meetup", "hangout", "party", "celebration", "game",
         "games", "trivia", "movie", "welcome", "friendship", "fun", "fest",
         "reception", "picnic", "bingo", "bites", "coffee", "appreciation",
-        "member", "members", "meeting", "meetings", "hour",
+        "member", "members", "meeting", "meetings", "hour", "meet", "greet",
+        "dinner", "night", "dark", "fair", "kick", "kickoff", "crafting",
+        "jeopardy", "market", "book", "yarn",
     },
     "Sports": {
         "sport", "sports", "athletic", "athletics", "game", "games", "match",
         "tournament", "playoff", "practice", "baseball", "basketball", "football",
         "soccer", "softball", "tennis", "golf", "volleyball", "swimming",
-        "diving", "track", "cross", "run", "running", "rebel",
+        "diving", "track", "cross", "run", "running", "rebel", "swim",
+        "bike", "bikes", "scooter", "paddleboard", "snowshoe", "trek",
+        "dogs", "desert", "range", "shoot", "pool",
     },
     "Tech": {
         "tech", "technology", "coding", "code", "programming", "developer",
         "development", "software", "hardware", "ai", "robotics", "cyber",
         "cybersecurity", "data", "engineering", "computer", "computing", "hack",
-        "hackathon", "stem", "machine", "science",
+        "hackathon", "stem", "machine", "science", "webcampus", "gis",
+        "podcasting", "audio", "recording", "editing",
     },
     "Community": {
         "community", "service", "volunteer", "volunteering", "outreach", "cleanup",
         "donation", "fundraiser", "charity", "support", "neighbors", "civic",
-        "engagement", "drive", "food", "pantry",
+        "engagement", "drive", "food", "pantry", "prep", "tax", "burrowing",
+        "owl", "clean", "up",
     },
 }
 
@@ -95,30 +113,48 @@ PHRASE_BONUSES = {
     "Academics": (
         "research symposium", "study session", "academic advising",
         "dissertation defense", "thesis defense", "study night", "online classes",
+        "teaching at unlv", "webcampus", "information session", "gis bootcamp",
+        "geographic information systems", "chemical hygiene", "laboratory safety",
+        "success series", "writing essentials", "faculty awards",
     ),
     "Career": (
         "career fair", "resume workshop", "mock interview", "job fair",
         "employer visit", "post graduate careers", "financial aid",
+        "tax prep", "retirement", "w-4", "corporate challenge",
     ),
     "Culture": (
         "cultural festival", "heritage month", "international night",
         "traditional chinese medicine", "global success series",
+        "lunar new year", "night market", "medieval feast",
     ),
     "Diversity": (
         "diversity dialogue", "equity summit", "pride week", "queer mini con",
-        "first generation",
+        "first generation", "fraternity sorority life", "good trouble",
     ),
     "Health": (
         "mental health", "wellness week", "self care", "fitness class",
         "blood drive", "guided meditation", "first aid certification",
+        "adaptive perfectionist", "family swim", "grounding and centering",
+        "intuitive eating", "coping with anxiety", "mood boosting", "pilates",
     ),
     "Social": (
         "game night", "welcome week", "ice cream", "movie night",
         "happy hour", "grad fest", "general member meetings", "bingo bites",
+        "meet and greet", "mid week dinner", "campus kick off", "rebels after dark",
+        "open mic", "blind date with a book",
     ),
-    "Sports": ("basketball game", "football game", "soccer match"),
-    "Tech": ("career in tech", "data science", "computer science", "artificial intelligence"),
-    "Community": ("community service", "food drive", "service day", "volunteer day"),
+    "Sports": (
+        "basketball game", "football game", "soccer match", "family swim",
+        "learn to stand up paddleboard", "snowshoe", "bike and scooter", "desert dogs",
+    ),
+    "Tech": (
+        "career in tech", "data science", "computer science", "artificial intelligence",
+        "podcasting 101", "podcasting 102", "audio mixing",
+    ),
+    "Community": (
+        "community service", "food drive", "service day", "volunteer day",
+        "tax prep", "clean up",
+    ),
 }
 
 PAST_MONTH_WINDOW_DAYS = 90
@@ -158,7 +194,7 @@ def parse_unlv_detail_time(value):
     return f"{hour}:{minute} {meridiem}"
 
 
-def fetch_event_time_range(link):
+def fetch_event_details(link):
     if not link:
         return {}
 
@@ -169,9 +205,16 @@ def fetch_event_time_range(link):
         return {}
 
     soup = BeautifulSoup(response.text, "html.parser")
+    event_details = {}
+
+    meta_description = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
+    description = meta_description.get("content", "").strip() if meta_description else ""
+    if description:
+        event_details["description"] = description
+
     when_heading = soup.find(lambda tag: tag.name in {"h2", "h3", "h4"} and tag.get_text(" ", strip=True) == "When")
     if when_heading is None:
-        return {}
+        return event_details
 
     value_parts = []
     sibling = when_heading.find_next_sibling()
@@ -185,33 +228,37 @@ def fetch_event_time_range(link):
 
     when_text = " ".join(value_parts)
     if not when_text:
-        return {}
+        return event_details
 
     parts = [segment.strip() for segment in when_text.split(" to ", 1)]
     if len(parts) != 2:
-        return {}
+        return event_details
 
     start_time = parse_unlv_detail_time(parts[0])
     end_time = parse_unlv_detail_time(parts[1])
     if not end_time:
-        return {}
+        return event_details
 
-    return {
+    event_details.update({
         "startTime": start_time,
         "endTime": end_time,
-    }
+    })
+    return event_details
 
 
 def normalize_text(text):
     return re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower()).strip()
 
 
-def categorize_event(event_name):
+def categorize_event(event_name, event_description=""):
     normalized_name = normalize_text(event_name)
-    if not normalized_name:
+    normalized_description = normalize_text(event_description)
+    combined_text = " ".join(part for part in [normalized_name, normalized_description] if part).strip()
+
+    if not combined_text:
         return None
 
-    tokens = set(normalized_name.split())
+    tokens = set(combined_text.split())
     category_scores = {category: 0 for category in INTERESTS}
 
     for category, keywords in CATEGORY_KEYWORDS.items():
@@ -220,7 +267,7 @@ def categorize_event(event_name):
 
     for category, phrases in PHRASE_BONUSES.items():
         for phrase in phrases:
-            if phrase in normalized_name:
+            if phrase in combined_text:
                 category_scores[category] += 2
 
     best_category = max(category_scores, key=category_scores.get)
@@ -279,7 +326,8 @@ def parse_events_from_soup(soup):
             "endDate": event_date,
             "endTime": "",
             "location": location,
-            "category": categorize_event(title),
+            "description": "",
+            "category": categorize_event(title, ""),
             "link": link,
         }
         events.append(event_data)
@@ -301,7 +349,7 @@ def enrich_event_times(events):
     future_to_event = {}
     with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
         for event in timed_events:
-            future = executor.submit(fetch_event_time_range, event["link"])
+            future = executor.submit(fetch_event_details, event["link"])
             future_to_event[future] = event
 
         for future in as_completed(future_to_event):
@@ -315,6 +363,10 @@ def enrich_event_times(events):
                 event["startTime"] = detail_time_data["startTime"]
             if detail_time_data.get("endTime"):
                 event["endTime"] = detail_time_data["endTime"]
+            if detail_time_data.get("description"):
+                event["description"] = detail_time_data["description"]
+
+            event["category"] = categorize_event(event.get("name", ""), event.get("description", ""))
 
     return events
 

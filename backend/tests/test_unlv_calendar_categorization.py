@@ -23,3 +23,15 @@ def test_categorize_event_returns_none_when_no_match():
 
 def test_categorize_event_sports():
     assert categorize_event("Football Game Watch Party") == "Sports"
+
+
+def test_categorize_event_uses_description_context():
+    assert categorize_event("Starting Strong", "Student success series workshop for new Rebels") == "Academics"
+
+
+def test_categorize_event_buckets_teaching_webcampus():
+    assert categorize_event("Teaching @ UNLV: Introduction to Teaching with WebCampus") == "Academics"
+
+
+def test_categorize_event_buckets_lunar_new_year():
+    assert categorize_event("Lunar New Year Night Market") == "Culture"

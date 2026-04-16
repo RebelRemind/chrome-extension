@@ -194,9 +194,13 @@ def discover_catalog_calendar_urls(soup, limit=2):
 
 
 def merge_academic_calendar_events(current_events, catalog_events):
+    today = datetime.now().date()
     merged = {}
 
     for event in catalog_events:
+        event_date = parse_full_event_date(event["startDate"])
+        if event_date and event_date.date() >= today:
+            continue
         merged[(event["name"], event["startDate"])] = event
 
     for event in current_events:

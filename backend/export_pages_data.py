@@ -23,6 +23,20 @@ def parse_date(value, formats):
     return value
 
 
+def format_time(value):
+    if not value:
+        return ""
+
+    for time_format in ("%H:%M:%S", "%H:%M"):
+        try:
+            parsed = datetime.strptime(value.strip(), time_format)
+            return parsed.strftime("%-I:%M %p")
+        except ValueError:
+            continue
+
+    return value
+
+
 def normalize_academic_calendar(items):
     normalized = []
     for item in items:
@@ -92,6 +106,7 @@ def normalize_unlv_calendar(items):
                 "endDate": end_date,
                 "endTime": item.get("endTime", ""),
                 "location": item.get("location", ""),
+                "description": item.get("description", ""),
                 "category": item.get("category"),
                 "link": item.get("link", ""),
             }
