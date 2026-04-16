@@ -620,9 +620,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 //region CANVAS
 
+function getDefaultColorList() {
+  return { UNLVEvents: "#b10202", InvolvementCenter: "#666666", userEvents: "#0000ff", CanvasCourses: {} };
+}
+
+function initializeColorList() {
+  chrome.storage.local.get("colorList", (data) => {
+    const currentColorList = data.colorList || {};
+    const defaultColorList = getDefaultColorList();
+
+    chrome.storage.local.set({
+      colorList: {
+        ...defaultColorList,
+        ...currentColorList,
+        CanvasCourses: currentColorList.CanvasCourses || defaultColorList.CanvasCourses,
+      },
+    });
+  });
+}
+
+function bootstrapCanvasState() {
+  chrome.storage.sync.get("preferences", (syncData) => {
+    const canvasEnabled = Boolean(syncData.preferences?.canvasIntegration);
+    if (!canvasEnabled) {
+      return;
+    }
+
+    chrome.storage.local.get("canvasPAT", (localData) => {
+      if (!localData.canvasPAT) {
+        return;
+      }
+
+      chrome.alarms.create("getAssignments", { periodInMinutes: 30 });
+      updateAssignments();
+    });
+  });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  const colorList = { UNLVEvents: "#b10202", InvolvementCenter: "#666666", userEvents: "#0000ff", CanvasCourses: {} };
-  chrome.storage.local.set({ colorList: colorList });
+  initializeColorList();
+  bootstrapCanvasState();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  initializeColorList();
+  bootstrapCanvasState();
 });
 
 /**

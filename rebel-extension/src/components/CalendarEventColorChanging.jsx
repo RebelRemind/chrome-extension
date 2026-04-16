@@ -2,10 +2,16 @@ import { useEffect, useState } from "react";
 import "./css/ColorPicker.css";
 
 function CalendarColorChange() {
-    const [colorList, setColorList] = useState({});
+    const [colorList, setColorList] = useState({
+        UNLVEvents: "#b10202",
+        InvolvementCenter: "#666666",
+        userEvents: "#0000ff",
+        CanvasCourses: {},
+    });
     const [involvementCenterPreference, setInvolvementCenterPreference] = useState(false);
     const [UNLVEventsPreference, setUNLVEventsPreference] = useState(false);
     const [CanvasIntegrationPreference, setCanvasIntegrationPreference] = useState(false);
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         /**
@@ -13,7 +19,13 @@ function CalendarColorChange() {
         */
         const getColorList = async() => {
             chrome.storage.local.get("colorList", (data) => {
-                setColorList(data.colorList);
+                setColorList({
+                    UNLVEvents: data.colorList?.UNLVEvents || "#b10202",
+                    InvolvementCenter: data.colorList?.InvolvementCenter || "#666666",
+                    userEvents: data.colorList?.userEvents || "#0000ff",
+                    CanvasCourses: data.colorList?.CanvasCourses || {},
+                });
+                setLoaded(true);
             });
 		};
 
@@ -22,9 +34,10 @@ function CalendarColorChange() {
         */
         const getPreferences = async() => {
             chrome.storage.sync.get("preferences", (data) => {
-                setInvolvementCenterPreference(data.preferences.involvementCenter);
-                setCanvasIntegrationPreference(data.preferences.canvasIntegration)
-                if (data.preferences.UNLVCalendar || data.preferences.academicCalendar || data.preferences.rebelCoverage) {
+                const preferences = data.preferences || {};
+                setInvolvementCenterPreference(Boolean(preferences.involvementCenter));
+                setCanvasIntegrationPreference(Boolean(preferences.canvasIntegration));
+                if (preferences.UNLVCalendar || preferences.academicCalendar || preferences.rebelCoverage) {
                     setUNLVEventsPreference(true);
                 }
             });
@@ -38,10 +51,14 @@ function CalendarColorChange() {
      * Effect Hook: Stores the new color list only after colorList was actually updated
      */
     useEffect(() => {
+        if (!loaded) {
+            return;
+        }
+
         chrome.storage.local.set({ "colorList": colorList }, () => {
             chrome.runtime.sendMessage({ type: "EVENT_UPDATED" });
         });
-    }, [colorList]);
+    }, [colorList, loaded]);
 
     /**
     * Update colorList with new color and save the new color to storage. 
@@ -123,11 +140,11 @@ function CalendarColorChange() {
                     /> 
                 </div>
             )}
-            {CanvasIntegrationPreference && colorList.CanvasCourses != {} && (
+            {CanvasIntegrationPreference && Object.keys(colorList.CanvasCourses || {}).length > 0 && (
                 <div>
                     <br></br>
                     <h2>Canvas Courses</h2>
-                    {Object.entries(colorList.CanvasCourses).map(([courseID, courseInfo]) => (
+                    {Object.entries(colorList.CanvasCourses || {}).map(([courseID, courseInfo]) => (
                         <div
                             key={courseID}
                             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}
