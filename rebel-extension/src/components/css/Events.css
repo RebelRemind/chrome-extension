@@ -61,7 +61,8 @@
     flex: 1;
     white-space: normal;
     word-break: break-word;
-    width: 220px;
+    min-width: 0;
+    width: 450px;
   }
   
   .event-org {

@@ -711,48 +711,75 @@ async function fetchCanvasAssignments() {
 }
 
 async function updateGoogleCalendar() {
+  if (updateGoogleCalendar.inFlight) {
+    updateGoogleCalendar.queued = true;
+    return false;
+  }
+
+  const now = Date.now();
+  const cooldownMs = 2 * 60 * 1000;
+  if (updateGoogleCalendar.lastStartedAt && now - updateGoogleCalendar.lastStartedAt < cooldownMs) {
+    console.log("Skipping Google Calendar update during cooldown window.");
+    updateGoogleCalendar.queued = true;
+    return false;
+  }
+
+  updateGoogleCalendar.inFlight = true;
+  updateGoogleCalendar.lastStartedAt = now;
   console.log("UPDATING CALENDAR");
-  getGoogleToken().then((GoogleToken) => {
+
+  try {
+    const GoogleToken = await getGoogleToken();
     if (!GoogleToken) {
       console.log("No chrome identity token found.");
       return false;
     }
 
-    const syncAndImport = (calendarID) => {
-      gatherEvents().then((eventList) => {
-        syncCalendar(eventList, GoogleToken, calendarID).then(() => {
-          importGoogleCalendarEvents(GoogleToken).then(() => {
-            chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
-              if (chrome.runtime.lastError) {
-                // handle receiving end does not exist error
-              }
-            });
-          });
-        });
+    const syncAndImport = async (calendarID) => {
+      const eventList = await gatherEvents();
+      await syncCalendar(eventList, GoogleToken, calendarID);
+      await importGoogleCalendarEvents(GoogleToken);
+      chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
+        if (chrome.runtime.lastError) {
+          // handle receiving end does not exist error
+        }
       });
     };
 
-    getCalendarID().then((storedCalendarID) => {
-      if (!storedCalendarID) {
-        getOrCreateCalendar(GoogleToken).then((newCalendarID) => {
-          syncAndImport(newCalendarID);
-        });
-      }
-      else {
-        checkCalendarExists(GoogleToken, storedCalendarID).then((result) => {
-          if (!result) {
-            getOrCreateCalendar(GoogleToken).then((newCalendarID) => {
-              syncAndImport(newCalendarID);
-            });
-          }
-          else {
-            syncAndImport(storedCalendarID);
-          }
-        });
-      }
-    });
-  });
+    const storedCalendarID = await getCalendarID();
+    if (!storedCalendarID) {
+      const newCalendarID = await getOrCreateCalendar(GoogleToken);
+      await syncAndImport(newCalendarID);
+      return true;
+    }
+
+    const exists = await checkCalendarExists(GoogleToken, storedCalendarID);
+    if (!exists) {
+      const newCalendarID = await getOrCreateCalendar(GoogleToken);
+      await syncAndImport(newCalendarID);
+      return true;
+    }
+
+    await syncAndImport(storedCalendarID);
+    return true;
+  } catch (error) {
+    console.error("Google Calendar background sync failed:", error);
+    return false;
+  } finally {
+    updateGoogleCalendar.inFlight = false;
+
+    if (updateGoogleCalendar.queued) {
+      updateGoogleCalendar.queued = false;
+      setTimeout(() => {
+        updateGoogleCalendar();
+      }, 5000);
+    }
+  }
 }
+
+updateGoogleCalendar.inFlight = false;
+updateGoogleCalendar.queued = false;
+updateGoogleCalendar.lastStartedAt = 0;
 
 async function updateAssignments() {
   const success = await fetchCanvasAssignments();

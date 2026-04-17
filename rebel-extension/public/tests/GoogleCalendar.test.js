@@ -215,16 +215,12 @@ describe("addOrUpdateEvents", () => {
 
     test("Event needs an update", async() => {
         fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 409
-        });
-        fetch.mockResolvedValueOnce({
             ok: true
         });
         const testEvent = { summary: "Final Exams", id: "unlvevent2960", description: "Study Hard", location: "", start: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, end: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} };
 
-        await addOrUpdateEvents("test_token", "test_calendarID", testEvent);
-        expect(fetch).toHaveBeenCalledTimes(2);
+        await addOrUpdateEvents("test_token", "test_calendarID", testEvent, new Set([testEvent.id]));
+        expect(fetch).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -279,15 +275,7 @@ describe("syncCalendar", () => {
             ]})
         });
         fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 409
-        });
-        fetch.mockResolvedValueOnce({
             ok: true
-        });
-        fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 409
         });
         fetch.mockResolvedValueOnce({
             ok: true
@@ -302,7 +290,7 @@ describe("syncCalendar", () => {
         ];
 
         await syncCalendar(testEvents, "test_token", "test_calendarID");
-        expect(fetch).toHaveBeenCalledTimes(6);
+        expect(fetch).toHaveBeenCalledTimes(4);
     });
 
     test("Delete an old event", async() => {
@@ -318,15 +306,7 @@ describe("syncCalendar", () => {
             ok: true
         });
         fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 409
-        });
-        fetch.mockResolvedValueOnce({
             ok: true
-        });
-        fetch.mockResolvedValueOnce({
-            ok: false,
-            status: 409
         });
         fetch.mockResolvedValueOnce({
             ok: true
@@ -337,7 +317,7 @@ describe("syncCalendar", () => {
         ];
 
         await syncCalendar(testEvents, "test_token", "test_calendarID");
-        expect(fetch).toHaveBeenCalledTimes(6);
+        expect(fetch).toHaveBeenCalledTimes(4);
     });
 });
 

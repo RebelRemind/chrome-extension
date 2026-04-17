@@ -13,6 +13,11 @@ function HomePage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [user, setUser] = useState(null);
   const DropdownRef = useRef(null);
+
+  const handleOpenWebsite = () => {
+    chrome.tabs.create({ url: "https://rebelremind.github.io" });
+    window.close();
+  };
   
   const handleClickAway = (event) => {
     if (DropdownRef.current && !DropdownRef.current.contains(event.target)) {
@@ -32,7 +37,7 @@ function HomePage() {
   useEffect(() => {
     // Wait a tick to make sure layout is rendered
     setTimeout(() => {
-      window.resizeTo(330, 400);
+      window.resizeTo(450, 600);
     }, 50);
     chrome.storage.sync.get(["user"], (data) => {
       if (data.user) {
@@ -42,7 +47,7 @@ function HomePage() {
   }, []);
 
   return (
-    <div>
+    <div className="popup-home">
       <div className="banner">
         <img
           src="/images/rebel-remind.png"
@@ -92,11 +97,20 @@ function HomePage() {
           )}
         </div>
       </div>
-      <AccordionMenu />
+      <div className="popup-main">
+        <AccordionMenu sections={["canvas", "yourEvents"]} containerHeight={405} />
+      </div>
+      <div className="popup-action-row">
+        <div className="popup-action-button">
+          <button type="button" onClick={handleOpenWebsite}>
+            Go to Web
+          </button>
+        </div>
+        <SidePanelButton label="Open Sidebar" className="popup-action-button" />
+      </div>
 
     </div>
   );
 }
 
 export default HomePage;
-

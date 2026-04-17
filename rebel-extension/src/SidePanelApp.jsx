@@ -1,16 +1,14 @@
 import "./SidePanelApp.css";
-import LoginButton from "./components/LoginButton";
 import AccordionMenu from "./components/AccordionMenu";
 import CalendarView from "./components/CalendarView";
-import UserProfile from "./components/UserProfile";
-import useAuth from "../public/hooks/useAuth";
+import { useState } from "react";
 import { useEffect } from "react"
 
 /**
  * Side Panel UI Layout for the Chrome Extension.
  */
 function SidePanelApp() {
-  const isAuthenticated = useAuth();
+  const [activeTab, setActiveTab] = useState("home");
 
   useEffect(() => {
     const applyGradient = (baseColor) => {
@@ -58,8 +56,37 @@ function SidePanelApp() {
   
 
   return (
-    <div>
-      <CalendarView />
+    <div className="sidepanel-shell">
+      <div className="sidepanel-tabbar">
+        <button
+          type="button"
+          className={`sidepanel-tab ${activeTab === "home" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("home")}
+        >
+          Home
+        </button>
+        <button
+          type="button"
+          className={`sidepanel-tab ${activeTab === "calendar" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("calendar")}
+        >
+          Calendar
+        </button>
+      </div>
+
+      {activeTab === "home" ? (
+        <section className="sidepanel-card sidepanel-card--browse">
+          <div className="sidepanel-card-header">
+            <p className="sidepanel-card-eyebrow">Browse</p>
+            <h2 className="sidepanel-card-title">Everything in one place.</h2>
+          </div>
+          <AccordionMenu containerHeight={650} className="sidepanel-accordion-menu" />
+        </section>
+      ) : (
+        <section className="sidepanel-card sidepanel-card--calendar">
+          <CalendarView />
+        </section>
+      )}
     </div>
   );
 }

@@ -13,6 +13,23 @@ function GroupByWeek({
     const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const todayIndex = new Date().getDay();
     const orderedWeekdays = [...weekdayNames.slice(todayIndex), ...weekdayNames.slice(0, todayIndex)];
+
+    const getRelativeWeekdayLabel = (dayName) => {
+      const dayIndex = weekdayNames.indexOf(dayName);
+      if (dayIndex === -1) {
+        return dayName;
+      }
+
+      if (dayIndex === todayIndex) {
+        return "Today";
+      }
+
+      if (dayIndex === (todayIndex + 1) % 7) {
+        return "Tomorrow";
+      }
+
+      return dayName;
+    };
     
   return (
     <div>
@@ -22,7 +39,7 @@ function GroupByWeek({
 
         return (
           <div key={day} className="weekday-section">
-            <div className="weekday-title">{viewMode === 'weekly' ? day : null}</div>
+            <div className="weekday-title">{viewMode === 'weekly' ? getRelativeWeekdayLabel(day) : null}</div>
             <ul className={`event-list ${viewMode === 'daily' ? 'event-list-daily' : ''}`}>              {items.map(item => (
                 <li key={item.id} className="event-item-canvas">
                   <div className="event-link">

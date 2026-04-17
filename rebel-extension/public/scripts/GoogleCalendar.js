@@ -44,7 +44,7 @@ export async function getCalendarID() {
  * Check if the calendar with the specified calendar ID exists on Google.
  */
 export async function checkCalendarExists(token, calendarID) {
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarID}`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarID)}`;
     const response = await fetch (url, {
         headers: { "Authorization": `Bearer ${token}` }
     });
@@ -218,6 +218,34 @@ export async function gatherEvents() {
     return combined;
 }
 
+function buildCalendarEventsUrl(calendarID) {
+    return `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarID)}/events`;
+}
+
+function buildCalendarEventUrl(calendarID, eventID) {
+    return `${buildCalendarEventsUrl(calendarID)}/${encodeURIComponent(eventID)}`;
+}
+
+function logGoogleCalendarFailure(message, details) {
+    try {
+        console.error(`${message}: ${JSON.stringify(details)}`);
+    } catch (_error) {
+        console.error(message, details);
+    }
+}
+
+async function readResponseText(response) {
+    if (!response || typeof response.text !== "function") {
+        return "";
+    }
+
+    try {
+        return await response.text();
+    } catch (_error) {
+        return "";
+    }
+}
+
 /**
  * Generate a hash based on the title and date of an event for use in the ID field.
  */
@@ -236,27 +264,68 @@ export function eventHash(title, date) {
 /**
  * Add or update events in the Google Calendar.
  */
-export async function addOrUpdateEvents(token, calendarID, event) {
-    let url = `https://www.googleapis.com/calendar/v3/calendars/${calendarID}/events?eventId=${event.id}`;
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(event)
-    });
-    
-    if (response.status === 409) {
-        let updateurl = `https://www.googleapis.com/calendar/v3/calendars/${calendarID}/events/${event.id}`;
-        await fetch (updateurl, {
-            method: "PUT",
+export async function addOrUpdateEvents(token, calendarID, event, existingEventIDs = new Set()) {
+    const eventExists = existingEventIDs.has(event.id);
+    const primaryUrl = eventExists
+        ? buildCalendarEventUrl(calendarID, event.id)
+        : buildCalendarEventsUrl(calendarID);
+    const primaryMethod = eventExists ? "PATCH" : "POST";
+
+    try {
+        const response = await fetch(primaryUrl, {
+            method: primaryMethod,
             headers: {
                 "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(event)
         });
+
+        if (response.ok) {
+            return response;
+        }
+
+        if (response.status === 409 && !eventExists) {
+            const updateUrl = buildCalendarEventUrl(calendarID, event.id);
+            const updateResponse = await fetch(updateUrl, {
+                method: "PATCH",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(event)
+            });
+
+            if (!updateResponse.ok) {
+                const errorText = await readResponseText(updateResponse);
+                logGoogleCalendarFailure("Google Calendar update failed", {
+                    calendarID,
+                    eventID: event.id,
+                    status: updateResponse.status,
+                    errorText,
+                });
+            }
+
+            return updateResponse;
+        }
+
+        const errorText = await readResponseText(response);
+        logGoogleCalendarFailure(`Google Calendar ${primaryMethod === "PATCH" ? "update" : "create"} failed`, {
+            calendarID,
+            eventID: event.id,
+            method: primaryMethod,
+            status: response.status,
+            errorText,
+        });
+        return response;
+    } catch (error) {
+        logGoogleCalendarFailure("Google Calendar addOrUpdateEvents failed", {
+            calendarID,
+            eventID: event.id,
+            method: primaryMethod,
+            error: error?.message || String(error),
+        });
+        return null;
     }
 }
 
@@ -264,7 +333,7 @@ export async function addOrUpdateEvents(token, calendarID, event) {
  * Get the list of events currently in the calendar.
  */
 export async function getExistingEvents(token, calendarID) {
-    let url = `https://www.googleapis.com/calendar/v3/calendars/${calendarID}/events?maxResults=2500`;
+    let url = `${buildCalendarEventsUrl(calendarID)}?maxResults=2500`;
     const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -347,6 +416,8 @@ function normalizeGoogleCalendarEvent(item) {
 
 export async function importGoogleCalendarEvents(token) {
     const timeMin = new Date();
+    timeMin.setDate(timeMin.getDate() - 1);
+    timeMin.setHours(0, 0, 0, 0);
     const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=2500&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin.toISOString())}`;
     const response = await fetch(url, {
         method: "GET",
@@ -354,6 +425,15 @@ export async function importGoogleCalendarEvents(token) {
             "Authorization": `Bearer ${token}`
         }
     });
+
+    if (!response.ok) {
+        const errorText = await readResponseText(response);
+        logGoogleCalendarFailure("Google Calendar import failed", {
+            status: response.status,
+            errorText,
+        });
+        return [];
+    }
 
     const payload = await response.json();
     const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -374,7 +454,7 @@ export async function importGoogleCalendarEvents(token) {
  * Delete any event from the calendar that is no longer found in Rebel Remind.
  */
 export async function deleteEvent(token, calendarID, eventID) {
-    let url = `https://www.googleapis.com/calendar/v3/calendars/${calendarID}/events/${eventID}`
+    let url = buildCalendarEventUrl(calendarID, eventID)
     const response = await fetch(url, {
         method: "DELETE",
         headers: {
@@ -388,6 +468,7 @@ export async function deleteEvent(token, calendarID, eventID) {
  */
 export async function syncCalendar(events, token, calendarID) {
     const existingEvents = await getExistingEvents(token, calendarID);
+    const existingEventIDs = new Set(existingEvents.map((event) => event.id));
     // ai-gen start (ChatGPT-4o, 1)
     const currentEventIDs = new Set(events.map(e => e.id));
     for (const existingEvent of existingEvents) {
@@ -397,6 +478,6 @@ export async function syncCalendar(events, token, calendarID) {
     }
     // ai-gen end
     for (const event of events) {
-        await addOrUpdateEvents(token, calendarID, event);
+        await addOrUpdateEvents(token, calendarID, event, existingEventIDs);
     }
 }

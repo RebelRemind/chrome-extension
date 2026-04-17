@@ -13,16 +13,16 @@ import { useEffect, useState, useRef } from "react";
  *
  * @returns {JSX.Element} The SidePanelButton component UI.
  */
-function SidePanelButton() {
+function SidePanelButton({ label = "Open Sidebar", className = "" }) {
   const handleOpenSidePanel = () => {
     chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL" });
     window.close();
   };
 
   return (
-    <div>
+    <div className={className}>
       <button onClick={handleOpenSidePanel}>
-        Calendar View
+        {label}
       </button>
     </div>
   );

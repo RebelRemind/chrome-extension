@@ -21,13 +21,13 @@ describe("SidePanelButton", () => {
     render(<SidePanelButton />);
 
     expect(
-      screen.getByText(/Calendar View/i)
+      screen.getByText(/Open Sidebar/i)
     ).toBeInTheDocument();
   });
 
   test("open side panel", () => {
     const { getByText } = render(<SidePanelButton />);
-    const button = getByText(/Calendar View/i);
+    const button = getByText(/Open Sidebar/i);
 
     fireEvent.click(button);
 
@@ -38,7 +38,7 @@ describe("SidePanelButton", () => {
 
   test("check window closed", async () => {
     const { getByText } = render(<SidePanelButton />);
-    const button = getByText(/Calendar View/i);
+    const button = getByText(/Open Sidebar/i);
 
     fireEvent.click(button);
 

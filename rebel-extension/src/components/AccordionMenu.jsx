@@ -41,7 +41,35 @@ import calIcon from "../assets/calIcon.png";
  * 
  * @returns {JSX.Element} The AccordionMenu component UI.
  */
-function AccordionMenu() {
+const SECTION_CONFIG = {
+  canvas: {
+    key: "canvas",
+    label: "Upcoming Assignments",
+    icon: canvasIcon,
+    iconAlt: "canvasIcon",
+    iconStyle: { height: "20px", marginRight: "8px" },
+  },
+  yourEvents: {
+    key: "yourEvents",
+    label: "Your Events",
+    icon: calIcon,
+    iconAlt: "calIcon",
+    iconStyle: { height: "20px", marginRight: "8px" },
+  },
+  unlvEvents: {
+    key: "unlvEvents",
+    label: "UNLV Events",
+    icon: unlvIcon,
+    iconAlt: "unlvIcon",
+    iconStyle: { marginLeft: "-6px", height: "20px" },
+  },
+};
+
+function AccordionMenu({
+  sections = ["canvas", "yourEvents", "unlvEvents"],
+  containerHeight = 470,
+  className = "",
+}) {
   const [filteredAC, setFilteredAcEvents] = useState([]);
   const [filteredIC, setFilteredIcEvents] = useState([]);
   const [filteredRC, setFilteredRcEvents] = useState([]);
@@ -181,16 +209,19 @@ function AccordionMenu() {
     const [openKeys, setOpenKeys] = useState([]);
     const [isAccordionReady, setIsAccordionReady] = useState(false);
 
+    const storageKey = `openKeys:${sections.join("-")}`;
+
     useEffect(() => {
-      chrome.storage.sync.get("openKeys", (result) => {
-        if (result.openKeys) {
-          setOpenKeys(result.openKeys);
+      chrome.storage.sync.get(storageKey, (result) => {
+        const storedOpenKeys = result[storageKey];
+        if (storedOpenKeys) {
+          setOpenKeys(storedOpenKeys.filter((key) => sections.includes(key)));
         } else {
-          setOpenKeys(["0", "1", "2"]); // first-time default
+          setOpenKeys(sections);
         }
         setIsAccordionReady(true); // signal ready
       });
-    }, []);
+    }, [storageKey, sections]);
 
     const toggleKey = (key) => {
       const newKeys = openKeys.includes(key)
@@ -198,21 +229,21 @@ function AccordionMenu() {
         : [...openKeys, key];
 
       setOpenKeys(newKeys);
-      chrome.storage.sync.set({ openKeys: newKeys });
+      chrome.storage.sync.set({ [storageKey]: newKeys });
     };
 
     const isOpen = (key) => openKeys.includes(key);
 
     // Dynamically determine height per open item
-    const totalHeight = 465; // not the full 470 height so that the rounded bottom can be seen
+    const totalHeight = Math.max(220, containerHeight - 5);
     const headerHeight = 52;
     const openCount = openKeys.length;
-    const bodyHeight = openCount > 0 ? (totalHeight - (3 * headerHeight)) / openCount : 0;
+    const bodyHeight = openCount > 0 ? (totalHeight - (sections.length * headerHeight)) / openCount : 0;
 
 /***  END DYNAMIC MENU SIZING  ***/
 
   return (
-    <div>
+    <div className={className}>
       <div className="accordion-header" style={{
         paddingTop: "0.4rem",
         display: "flex",
@@ -221,7 +252,7 @@ function AccordionMenu() {
         marginBottom: "0.5rem",
         paddingRight: "1rem",
       }}>
-        <p className="accordion-text" style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>
+        <p className="accordion-text" style={{ color: "white", margin: 0, fontSize: "1rem", fontWeight: 600 }}>
           Your {viewMode === "daily" ? "Day" : "Week"} at a Glance!
         </p>
         <Toggle
@@ -229,49 +260,30 @@ function AccordionMenu() {
           onChange={() => setViewMode(prev => (prev === "daily" ? "weekly" : "daily"))}
         />
       </div>
-      <div className="accordion-wrapper">
+      <div className="accordion-wrapper" style={{ height: `${containerHeight}px` }}>
         {isAccordionReady && (
           <Accordion activeKey={openKeys} alwaysOpen className="accordion">
-            {["0", "1", "2"].map((key, index) => {
-              const isSectionOpen = isOpen(key);
+            {sections.map((sectionKey) => {
+              const isSectionOpen = isOpen(sectionKey);
               const itemFlexGrow = isSectionOpen ? 1 : 0;
+              const section = SECTION_CONFIG[sectionKey];
 
               return (
                 <Accordion.Item
-                  eventKey={key}
-                  key={key}
+                  eventKey={section.key}
+                  key={section.key}
                   className="accordion-item"
                   style={{ flexGrow: itemFlexGrow }}
                 >
-                <Accordion.Header onClick={() => toggleKey(key)}>
-                  {index === 0 && (
+                <Accordion.Header onClick={() => toggleKey(section.key)}>
+                  {section && (
                     <>
                       <img 
-                        src= {canvasIcon}
-                        alt= "canvasIcon" 
-                        style={{ height: '20px', marginRight: '8px' }} 
+                        src={section.icon}
+                        alt={section.iconAlt}
+                        style={section.iconStyle}
                       />
-                      Upcoming Assignments
-                    </>
-                  )}
-                  {index === 1 && (
-                    <>
-                      <img 
-                        src={calIcon}
-                        alt="calIcon" 
-                        style={{  height: '20px', marginRight: '8px'}} 
-                      />
-                      Your Events
-                    </>
-                  )}
-                  {index === 2 && (
-                    <>
-                      <img 
-                        src={unlvIcon}
-                        alt="unlvIcon" 
-                        style={{ marginLeft: '-6px', height: '20px' }} 
-                      />    
-                      UNLV Events
+                      {section.label}
                     </>
                   )}
                 </Accordion.Header>
@@ -280,12 +292,15 @@ function AccordionMenu() {
                     style={{
                       display: isSectionOpen ? "block" : "none",
                       height: `${bodyHeight}px`, // height not maxHeight to ensure equal distribution
+                      maxHeight: `${bodyHeight}px`,
+                      overflowY: "auto",
+                      overflowX: "hidden",
+                      minHeight: 0,
                     }}
                   >
-
-                    {index === 0 && <CanvasAssignments viewMode={viewMode} />}
-                    {index === 1 && <Events events={[...filteredIC, ...normalizedSavedCampusEvents, ...normalizedGoogleCalendarEvents, ...normalizedUserEvents]} viewMode={viewMode} setActiveEventPopup={setActiveEventPopup} yourEvents={true}/>}
-                    {index === 2 && <Events events={[
+                    {sectionKey === "canvas" && <CanvasAssignments viewMode={viewMode} />}
+                    {sectionKey === "yourEvents" && <Events events={[...filteredIC, ...normalizedSavedCampusEvents, ...normalizedGoogleCalendarEvents, ...normalizedUserEvents]} viewMode={viewMode} setActiveEventPopup={setActiveEventPopup} yourEvents={true}/>}
+                    {sectionKey === "unlvEvents" && <Events events={[
                       ...(Array.isArray(filteredUC) ? filteredUC : []),
                       ...(Array.isArray(filteredAC) ? filteredAC.map(event => ({ ...event, academicCalendar: true })) : []),
                       ...(Array.isArray(filteredRC) ? filteredRC : [])

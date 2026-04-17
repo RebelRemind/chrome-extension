@@ -22,6 +22,128 @@
   box-sizing: border-box;
 }
 
+.sidepanel-shell {
+  width: 100%;
+}
+
+.sidepanel-tabbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(18, 18, 18, 0.24);
+  backdrop-filter: blur(14px);
+  border-radius: 999px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.14);
+}
+
+.sidepanel-tab {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.sidepanel-tab:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidepanel-tab.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b0000;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.sidepanel-card {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(18, 18, 18, 0.24);
+  backdrop-filter: blur(14px);
+  border-radius: 1.65rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
+  padding: 1rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.sidepanel-card-header {
+  margin-bottom: 0.8rem;
+  text-align: left;
+  color: white;
+}
+
+.sidepanel-card-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sidepanel-card-title {
+  margin: 0.3rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.sidepanel-card--browse .accordion-wrapper {
+  height: 650px;
+  width: 100%;
+}
+
+.sidepanel-card--browse .sidepanel-accordion-menu {
+  width: 100%;
+  max-width: none;
+}
+
+.sidepanel-card--browse .accordion,
+.sidepanel-card--browse .accordion-item,
+.sidepanel-card--browse .accordion-collapse,
+.sidepanel-card--browse .accordion-collapse.show,
+.sidepanel-card--browse .accordion-button,
+.sidepanel-card--browse .accordion-body {
+  width: 100%;
+}
+
+.sidepanel-card--browse .accordion-item {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidepanel-card--browse .accordion-item .accordion-collapse,
+.sidepanel-card--browse .accordion-item .accordion-collapse.show {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidepanel-card--browse .accordion-item .accordion-body {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.sidepanel-card--calendar .calendar-view-shell {
+  padding-top: 0;
+}
+
+.sidepanel-card--calendar .calendar-view-frame {
+  max-width: none;
+  margin: 0;
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 .accordion-button {
   --bs-accordion-btn-color: black;
   --bs-accordion-btn-bg: gray;

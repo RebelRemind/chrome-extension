@@ -115,23 +115,69 @@
 }
 
 
-.accordion-wrapper {
-  height: 470px;
+.popup-home {
+  min-height: 560px;
+  height: 560px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.accordion {
+.popup-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.popup-home .accordion-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
+.popup-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.3rem 1rem 0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.popup-action-button,
+.popup-action-button > div {
+  width: 100%;
+}
+
+.popup-action-button button {
+  width: 100%;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #6b0000;
+  border: 1px solid rgba(107, 0, 0, 0.12);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.popup-action-button button:hover {
+  background: #ffffff;
+}
+
+.popup-home .accordion {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 0 1rem 1rem 1rem; 
+  width: 100%;
   /* 10px on btm to see rounding */
 }
 
-.accordion-item {
+.popup-home .accordion-item {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -140,34 +186,38 @@
   overflow: hidden;
 }
 
-.accordion-body {
+.popup-home .accordion-body {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 5px;
+  padding: 16px 20px;
   min-height: 0;
   transition: height 0.3s ease;
 }
 
-.accordion-body::-webkit-scrollbar {
+.popup-home .accordion-body::-webkit-scrollbar {
   display: none;
 }
 
-.accordion-header {
+.popup-home .accordion-header {
   flex-shrink: 0;
   font-weight: bold;
 }
 
-.accordion-button {
+.popup-home .accordion-button {
   --bs-accordion-btn-color: black;
   --bs-accordion-btn-bg: gray;
-  --bs-accordion-btn-bg: lightgray;
   --bs-accordion-active-color: black;
   --bs-accordion-active-bg: lightgray;
 }
 
-.accordion-button:hover {
+.popup-home .accordion-button:hover {
   background: rgba(0, 0, 0, 0.28) !important; /* like --containerbg */
   color: #fff !important;
+}
+
+.popup-home .event-name {
+  width: 220px;
+  min-width: 220px;
 }
 
 

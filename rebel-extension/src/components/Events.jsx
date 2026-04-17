@@ -108,12 +108,29 @@ function handleRemoveEvent(event) {
     const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const todayIndex = new Date().getDay();
     const orderedWeekdays = [...weekdayNames.slice(todayIndex), ...weekdayNames.slice(0, todayIndex)];
+
+    const getRelativeWeekdayLabel = (dayName) => {
+      const dayIndex = weekdayNames.indexOf(dayName);
+      if (dayIndex === -1) {
+        return dayName;
+      }
+
+      if (dayIndex === todayIndex) {
+        return "Today";
+      }
+
+      if (dayIndex === (todayIndex + 1) % 7) {
+        return "Tomorrow";
+      }
+
+      return dayName;
+    };
       
     return orderedWeekdays
       .filter(day => grouped[day])
       .map(day => (
         <div key={day} className="weekday-section">
-          <div className="weekday-title">{day}</div>
+          <div className="weekday-title">{getRelativeWeekdayLabel(day)}</div>
           {/* <hr className="weekday-divider" /> */}
           <ul className={`event-list ${viewMode === 'daily' ? 'event-list-daily' : ''}`}>
             {grouped[day].map(event => (

@@ -44,8 +44,24 @@ const useApplyBackgroundColor = () => {
   const [textColor, setTextColor] = useState(DEFAULT_TEXT);
   const [themeKey, setThemeKey] = useState("custom");
 
+  const blendHexColor = (color, ratio = 0.5) => {
+    if (!color || !color.startsWith("#") || color.length !== 7) {
+      return color;
+    }
+
+    const clampRatio = Math.max(0, Math.min(1, ratio));
+    const red = Number.parseInt(color.slice(1, 3), 16);
+    const green = Number.parseInt(color.slice(3, 5), 16);
+    const blue = Number.parseInt(color.slice(5, 7), 16);
+    const mixChannel = (channel) => Math.round(channel + ((255 - channel) * clampRatio));
+
+    return `#${[mixChannel(red), mixChannel(green), mixChannel(blue)]
+      .map((channel) => channel.toString(16).padStart(2, "0"))
+      .join("")}`;
+  };
+
   const applyColor = (bg, text) => {
-    const gradient = `linear-gradient(to bottom right, ${bg}, #f8d7da)`;
+    const gradient = `linear-gradient(135deg, ${bg}, ${blendHexColor(bg, 0.5)})`;
     document.documentElement.style.setProperty("--app-background", gradient);
     document.documentElement.style.setProperty("--app-text-color", text);
     document.body.style.background = gradient;
