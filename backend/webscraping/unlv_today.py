@@ -12,7 +12,6 @@ BASE_URL = "https://www.unlv.edu"
 URL = f"{BASE_URL}/news/unlvtoday"
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
 DETAIL_FETCH_WORKERS = 6
-MAX_RESULTS = 20
 
 
 def parse_date(value):
@@ -112,7 +111,7 @@ def parse_listing_page(html):
 
         results.extend(parse_list_block(view.select_one(".view-content") or view, section_title))
 
-    return results[:MAX_RESULTS]
+    return results
 
 
 def fetch_article_details(item):
