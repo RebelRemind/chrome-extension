@@ -15,6 +15,7 @@ setup(
             'organizations = webscraping.organizations:default',
             'rebel_coverage = webscraping.rebel_coverage:default',
             'unlv_calendar = webscraping.unlv_calendar:default',
+            'unlv_today = webscraping.unlv_today:main',
             'serve_data = database.serve_data:default',
             'test_academicCalendar = tests.test_academicCalendar:unittest.main',
             'test_involvementCenter = tests.test_involvementCenter:unittest.main',

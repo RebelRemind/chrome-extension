@@ -27,3 +27,14 @@ To run just the academic calendar source check:
 ```bash
 python3 backend/testscrapers/run_academic_calendar_check.py
 ```
+
+To run just the UNLV Today source check:
+
+```bash
+python3 backend/testscrapers/run_unlv_today_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/unlvtoday_list.json`
+- `backend/testscrapers/output/unlvtoday_summary.json`

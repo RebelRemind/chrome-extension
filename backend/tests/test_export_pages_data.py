@@ -4,6 +4,7 @@ from export_pages_data import (
     normalize_involvement_center,
     normalize_rebel_coverage,
     normalize_unlv_calendar,
+    normalize_unlv_today,
 )
 
 
@@ -53,3 +54,19 @@ def test_normalize_unlv_calendar_converts_verbose_date():
     )
     assert result[0]["startDate"] == "2025-04-29"
     assert result[0]["description"] == "AI workshop"
+
+
+def test_normalize_unlv_today_converts_publish_date():
+    result = normalize_unlv_today(
+        [{
+            "name": "Podcast: How AI Can Improve Instructional Design",
+            "category": "Announcements",
+            "section": "More from the Last Week",
+            "publishedDate": "April 14, 2026",
+            "publishedAt": "2026-04-14T13:14:44-07:00",
+            "summary": "Learn how AI can improve instructional design.",
+            "link": "https://www.unlv.edu/news/unlvtoday/podcast-how-ai-can-improve-instructional-design",
+        }]
+    )
+    assert result[0]["publishedDate"] == "2026-04-14"
+    assert result[0]["category"] == "Announcements"
