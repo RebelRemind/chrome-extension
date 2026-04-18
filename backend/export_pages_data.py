@@ -7,7 +7,9 @@ from webscraping.academic_calendar import scrape as scrape_academic_calendar
 from webscraping.involvement_center import scrape as scrape_involvement_center
 from webscraping.organizations import scrape as scrape_organizations
 from webscraping.rebel_coverage import scrape as scrape_rebel_coverage
+from webscraping.scarlet_and_gray_news import scrape as scrape_scarlet_and_gray_news, to_public_items as normalize_scarlet_and_gray_news
 from webscraping.unlv_calendar import scrape as scrape_unlv_calendar
+from webscraping.unlv_in_the_news import scrape as scrape_unlv_in_the_news, to_public_items as normalize_unlv_in_the_news
 from webscraping.unlv_today import scrape as scrape_unlv_today, to_public_items as normalize_unlv_today
 
 
@@ -131,6 +133,8 @@ def build_datasets():
         "academiccalendar_list.json": normalize_academic_calendar(scrape_academic_calendar() or []),
         "involvementcenter_list.json": normalize_involvement_center(scrape_involvement_center() or []),
         "rebelcoverage_list.json": normalize_rebel_coverage(scrape_rebel_coverage() or []),
+        "scarletandgraynews_list.json": normalize_scarlet_and_gray_news(scrape_scarlet_and_gray_news() or []),
+        "unlvinthenews_list.json": normalize_unlv_in_the_news(scrape_unlv_in_the_news() or []),
         "unlvcalendar_list.json": normalize_unlv_calendar(scrape_unlv_calendar() or []),
         "unlvtoday_list.json": normalize_unlv_today(scrape_unlv_today() or []),
         "organization_list.json": normalize_organizations(scrape_organizations() or []),

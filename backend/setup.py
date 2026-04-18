@@ -14,6 +14,8 @@ setup(
             'involvement_center = webscraping.involvement_center:default',
             'organizations = webscraping.organizations:default',
             'rebel_coverage = webscraping.rebel_coverage:default',
+            'scarlet_and_gray_news = webscraping.scarlet_and_gray_news:main',
+            'unlv_in_the_news = webscraping.unlv_in_the_news:main',
             'unlv_calendar = webscraping.unlv_calendar:default',
             'unlv_today = webscraping.unlv_today:main',
             'serve_data = database.serve_data:default',

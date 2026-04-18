@@ -38,3 +38,25 @@ That command writes:
 
 - `backend/testscrapers/output/unlvtoday_list.json`
 - `backend/testscrapers/output/unlvtoday_summary.json`
+
+To run just the UNLV In The News source check:
+
+```bash
+python3 backend/testscrapers/run_unlv_in_the_news_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/unlvinthenews_list.json`
+- `backend/testscrapers/output/unlvinthenews_summary.json`
+
+To run just the Scarlet and Gray News source check:
+
+```bash
+python3 backend/testscrapers/run_scarlet_and_gray_news_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/scarletandgraynews_list.json`
+- `backend/testscrapers/output/scarletandgraynews_summary.json`
