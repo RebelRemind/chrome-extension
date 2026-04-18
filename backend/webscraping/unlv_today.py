@@ -6,12 +6,15 @@ from pathlib import Path
 from datetime import datetime
 
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
+from urllib3.util.retry import Retry
 
 BASE_URL = "https://www.unlv.edu"
 URL = f"{BASE_URL}/news/unlvtoday"
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
-DETAIL_FETCH_WORKERS = 6
+DETAIL_FETCH_WORKERS = 2
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
 
 
 def parse_date(value):
@@ -25,6 +28,31 @@ def parse_date(value):
             continue
 
     return value
+
+
+def fetch_text(url, timeout):
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=2,
+        status_forcelist=RETRY_STATUS_CODES,
+        allowed_methods=("GET",),
+        respect_retry_after_header=True,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session = requests.Session()
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    try:
+        response = session.get(url, headers=USER_AGENT, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    finally:
+        session.close()
 
 
 def write_json(output_dir, file_name, payload):
@@ -116,19 +144,17 @@ def parse_listing_page(html):
 
 def fetch_article_details(item):
     try:
-        response = requests.get(item["link"], headers=USER_AGENT, timeout=10)
-        response.raise_for_status()
+        article_html = fetch_text(item["link"], timeout=10)
     except requests.RequestException:
         return item
 
-    details = extract_article_details(response.text)
+    details = extract_article_details(article_html)
     return {**item, **details}
 
 
 def scrape():
-    response = requests.get(URL, headers=USER_AGENT, timeout=15)
-    response.raise_for_status()
-    results = parse_listing_page(response.text)
+    listing_html = fetch_text(URL, timeout=20)
+    results = parse_listing_page(listing_html)
 
     enriched = []
     with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:

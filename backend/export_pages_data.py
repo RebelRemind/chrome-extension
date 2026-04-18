@@ -1,6 +1,6 @@
 import argparse
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import traceback
 
@@ -207,7 +207,7 @@ def main():
         write_json(output_dir, file_name, payload)
 
     metadata = {
-        "generatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "files": sorted(datasets.keys()),
     }
     write_json(output_dir, "index.json", metadata)
