@@ -1,4 +1,4 @@
-from webscraping.career_events import parse_listing_page
+from webscraping.career_events import parse_listing_page, parse_next_page_url
 
 
 def test_parse_listing_page_extracts_career_events():
@@ -30,3 +30,14 @@ def test_parse_listing_page_extracts_career_events():
     assert result[0]["startDate"] == "2026-04-22"
     assert result[0]["location"] == "Virtual"
     assert "12pm - 1pm PDT" in result[0]["summary"]
+
+
+def test_parse_next_page_url_extracts_pagination_link():
+    html = """
+    <nav class="pagination">
+      <span class="page-numbers current">Page 1</span>
+      <a class="page-numbers" href="https://careerlaunch.unlv.edu/events/page/2/">Page 2</a>
+    </nav>
+    """
+
+    assert parse_next_page_url(html) == "https://careerlaunch.unlv.edu/events/page/2/"

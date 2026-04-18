@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -62,6 +63,18 @@ def parse_listing_page(html):
     return results
 
 
+def parse_next_page_url(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    for link_node in soup.select(".pagination a[href]"):
+        label = link_node.get_text(" ", strip=True).lower()
+        href = link_node.get("href", "").strip()
+        if href and "page" in label:
+            return urljoin(URL, href)
+
+    return ""
+
+
 def to_public_items(items):
     return [
         {
@@ -85,9 +98,28 @@ def write_json(output_dir, file_name, payload):
 
 
 def scrape():
-    response = requests.get(URL, headers=USER_AGENT, timeout=15)
-    response.raise_for_status()
-    return parse_listing_page(response.text)
+    results = []
+    seen_links = set()
+    seen_pages = set()
+    next_url = URL
+
+    while next_url and next_url not in seen_pages:
+        seen_pages.add(next_url)
+        response = requests.get(next_url, headers=USER_AGENT, timeout=15)
+        response.raise_for_status()
+
+        page_items = parse_listing_page(response.text)
+        for item in page_items:
+            link = item.get("link", "")
+            if link and link in seen_links:
+                continue
+            if link:
+                seen_links.add(link)
+            results.append(item)
+
+        next_url = parse_next_page_url(response.text)
+
+    return results
 
 
 def main():
