@@ -1,4 +1,5 @@
 from export_pages_data import (
+    build_dataset,
     format_time,
     normalize_academic_calendar,
     normalize_involvement_center,
@@ -70,3 +71,12 @@ def test_normalize_unlv_today_converts_publish_date():
     )
     assert result[0]["publishedDate"] == "2026-04-14"
     assert result[0]["category"] == "Announcements"
+
+
+def test_build_dataset_returns_empty_list_when_scraper_fails():
+    def failing_scraper():
+        raise TimeoutError("source timed out")
+
+    result = build_dataset("scarletandgraynews_list.json", failing_scraper, lambda items: items)
+
+    assert result == []

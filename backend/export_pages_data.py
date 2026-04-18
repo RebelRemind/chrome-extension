@@ -2,6 +2,7 @@ import argparse
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+import traceback
 
 from webscraping.academic_calendar import scrape as scrape_academic_calendar
 from webscraping.involvement_center import scrape as scrape_involvement_center
@@ -128,16 +129,57 @@ def write_json(output_dir, file_name, payload):
         file_handle.write("\n")
 
 
+def build_dataset(file_name, scraper, normalizer):
+    try:
+        return normalizer(scraper() or [])
+    except Exception as exc:
+        print(f"[pages-data] Failed to build {file_name}: {exc}", flush=True)
+        print(traceback.format_exc(), flush=True)
+        return []
+
+
 def build_datasets():
     return {
-        "academiccalendar_list.json": normalize_academic_calendar(scrape_academic_calendar() or []),
-        "involvementcenter_list.json": normalize_involvement_center(scrape_involvement_center() or []),
-        "rebelcoverage_list.json": normalize_rebel_coverage(scrape_rebel_coverage() or []),
-        "scarletandgraynews_list.json": normalize_scarlet_and_gray_news(scrape_scarlet_and_gray_news() or []),
-        "unlvinthenews_list.json": normalize_unlv_in_the_news(scrape_unlv_in_the_news() or []),
-        "unlvcalendar_list.json": normalize_unlv_calendar(scrape_unlv_calendar() or []),
-        "unlvtoday_list.json": normalize_unlv_today(scrape_unlv_today() or []),
-        "organization_list.json": normalize_organizations(scrape_organizations() or []),
+        "academiccalendar_list.json": build_dataset(
+            "academiccalendar_list.json",
+            scrape_academic_calendar,
+            normalize_academic_calendar,
+        ),
+        "involvementcenter_list.json": build_dataset(
+            "involvementcenter_list.json",
+            scrape_involvement_center,
+            normalize_involvement_center,
+        ),
+        "rebelcoverage_list.json": build_dataset(
+            "rebelcoverage_list.json",
+            scrape_rebel_coverage,
+            normalize_rebel_coverage,
+        ),
+        "scarletandgraynews_list.json": build_dataset(
+            "scarletandgraynews_list.json",
+            scrape_scarlet_and_gray_news,
+            normalize_scarlet_and_gray_news,
+        ),
+        "unlvinthenews_list.json": build_dataset(
+            "unlvinthenews_list.json",
+            scrape_unlv_in_the_news,
+            normalize_unlv_in_the_news,
+        ),
+        "unlvcalendar_list.json": build_dataset(
+            "unlvcalendar_list.json",
+            scrape_unlv_calendar,
+            normalize_unlv_calendar,
+        ),
+        "unlvtoday_list.json": build_dataset(
+            "unlvtoday_list.json",
+            scrape_unlv_today,
+            normalize_unlv_today,
+        ),
+        "organization_list.json": build_dataset(
+            "organization_list.json",
+            scrape_organizations,
+            normalize_organizations,
+        ),
     }
 
 
