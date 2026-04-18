@@ -5,6 +5,8 @@ from pathlib import Path
 import traceback
 
 from webscraping.academic_calendar import scrape as scrape_academic_calendar
+from webscraping.campus_wide_events import scrape as scrape_campus_wide_events, to_public_items as normalize_campus_wide_events
+from webscraping.career_events import scrape as scrape_career_events, to_public_items as normalize_career_events
 from webscraping.involvement_center import scrape as scrape_involvement_center
 from webscraping.organizations import scrape as scrape_organizations
 from webscraping.rebel_coverage import scrape as scrape_rebel_coverage
@@ -144,6 +146,16 @@ def build_datasets():
             "academiccalendar_list.json",
             scrape_academic_calendar,
             normalize_academic_calendar,
+        ),
+        "campuswideevents_list.json": build_dataset(
+            "campuswideevents_list.json",
+            scrape_campus_wide_events,
+            normalize_campus_wide_events,
+        ),
+        "careerevents_list.json": build_dataset(
+            "careerevents_list.json",
+            scrape_career_events,
+            normalize_career_events,
         ),
         "involvementcenter_list.json": build_dataset(
             "involvementcenter_list.json",

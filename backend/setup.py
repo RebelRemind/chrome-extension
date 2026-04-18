@@ -11,6 +11,8 @@ setup(
     entry_points={
         'console_scripts': [
             'academic_calendar = webscraping.academic_calendar:default',
+            'campus_wide_events = webscraping.campus_wide_events:main',
+            'career_events = webscraping.career_events:main',
             'involvement_center = webscraping.involvement_center:default',
             'organizations = webscraping.organizations:default',
             'rebel_coverage = webscraping.rebel_coverage:default',

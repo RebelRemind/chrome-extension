@@ -60,3 +60,25 @@ That command writes:
 
 - `backend/testscrapers/output/scarletandgraynews_list.json`
 - `backend/testscrapers/output/scarletandgraynews_summary.json`
+
+To run just the Campus-Wide Events source check:
+
+```bash
+python3 backend/testscrapers/run_campus_wide_events_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/campuswideevents_list.json`
+- `backend/testscrapers/output/campuswideevents_summary.json`
+
+To run just the Career Events source check:
+
+```bash
+python3 backend/testscrapers/run_career_events_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/careerevents_list.json`
+- `backend/testscrapers/output/careerevents_summary.json`
