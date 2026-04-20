@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 URL = "https://unlvscarletandgray.com/category/news/"
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
+REQUEST_TIMEOUT = (5, 20)
 
 
 def parse_listing_page(html):
@@ -83,7 +84,7 @@ def write_json(output_dir, file_name, payload):
 
 
 def scrape():
-    response = requests.get(URL, headers=USER_AGENT, timeout=15)
+    response = requests.get(URL, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return parse_listing_page(response.text)
 
