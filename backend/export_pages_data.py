@@ -73,6 +73,7 @@ def normalize_involvement_center(items):
                 "endTime": item.get("endTime", ""),
                 "location": item.get("location", ""),
                 "organization": item.get("organization", ""),
+                "imageUrl": item.get("imageUrl", ""),
                 "link": item.get("link", ""),
             }
         )
@@ -121,7 +122,14 @@ def normalize_unlv_calendar(items):
 
 
 def normalize_organizations(items):
-    return [{"name": item.get("name", "")} for item in items]
+    return [
+        {
+            "name": item.get("name", ""),
+            "imageUrl": item.get("imageUrl", ""),
+            "link": item.get("link", ""),
+        }
+        for item in items
+    ]
 
 
 def write_json(output_dir, file_name, payload):

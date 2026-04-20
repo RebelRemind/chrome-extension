@@ -6,6 +6,9 @@ from database import BASE
 
 URL = "https://involvementcenter.unlv.edu/api/discovery/event/search?"
 PAST_MONTH_WINDOW_DAYS = 90
+IMAGE_URL = "https://se-images.campuslabs.com/clink/images/"
+USER_AGENT = {"User-Agent": "Mozilla/5.0"}
+REQUEST_TIMEOUT = (5, 20)
 
 
 def build_query():
@@ -13,7 +16,8 @@ def build_query():
     return f"endsAfter={cutoff}&orderByField=endsOn&orderByDirection=ascending&status=Approved&take=9999"
 
 def scrape():
-    response = requests.get(URL + build_query())
+    response = requests.get(URL + build_query(), headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
     json_data = response.json()
     events = json_data['value']
     results = []
@@ -51,6 +55,8 @@ def map_event(event_json):
     startTime = format_local_time(local_startTime)
     endTime = format_local_time(local_endTime)
 
+    image_path = (event_json.get('imagePath') or '').strip()
+
     return {
         'name': event_json['name'],
         'startDate': startDate,
@@ -59,7 +65,8 @@ def map_event(event_json):
         'endTime': endTime,
         'location': event_json['location'],
         'organization': event_json['organizationName'],
-        'link': f"https://involvementcenter.unlv.edu/event/{event_json['id']}"
+        'link': f"https://involvementcenter.unlv.edu/event/{event_json['id']}",
+        'imageUrl': f"{IMAGE_URL}{image_path}?preset=med-w" if image_path else "",
     }
 
 if __name__ == '__main__':
