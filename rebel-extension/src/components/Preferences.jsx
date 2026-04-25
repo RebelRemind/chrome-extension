@@ -60,6 +60,12 @@ const Preferences = ({ setupMode = false }) => {
 
     // Sports and interests state
     const allSports = ["Baseball", "Football", "Softball", "Swimming & Diving", "Men's Basketball", "Men's Golf", "Men's Soccer", "Men's Tennis", "Women's Basketball", "Women's Cross Country", "Women's Golf", "Women's Soccer", "Women's Tennis", "Women's Track & Field", "Women's Volleyball"];
+    const menSportFilters = allSports.filter((sport) => !sport.startsWith("Women's") && sport !== "Softball");
+    const womenSportFilters = [
+        "Softball",
+        "Swimming & Diving",
+        ...allSports.filter((sport) => sport.startsWith("Women's")),
+    ];
     const allInterests = ["Arts", "Academics", "Career", "Culture", "Diversity", "Health", "Social", "Sports", "Tech", "Community"];
     const [selectedSports, setSelectedSports] = useState([]);
     const [selectedInterests, setSelectedInterests] = useState([]);
@@ -264,9 +270,8 @@ const Preferences = ({ setupMode = false }) => {
     };
 
     // =================== RENDER ===================
-    const splitIndex = allSports.indexOf("Women's Basketball");
-    const leftSports = allSports.slice(0, splitIndex);
-    const rightSports = allSports.slice(splitIndex);
+    const leftSports = menSportFilters;
+    const rightSports = womenSportFilters;
 
     return (
         <>
