@@ -1,8 +1,10 @@
 import requests
 import json
+import re
 from datetime import datetime, timedelta
 from pytz import timezone
 from database import BASE
+from bs4 import BeautifulSoup
 
 URL = "https://involvementcenter.unlv.edu/api/discovery/event/search?"
 PAST_MONTH_WINDOW_DAYS = 90
@@ -32,6 +34,15 @@ def scrape():
 
 def format_local_time(value):
     return value.strftime("%I:%M %p").lstrip("0")
+
+
+def clean_description(value):
+    if not value:
+        return ""
+
+    soup = BeautifulSoup(value, "html.parser")
+    text = " ".join(soup.get_text(" ", strip=True).split())
+    return re.sub(r"\s+([,.;:!?])", r"\1", text)
 
 def default():
     results = scrape()
@@ -65,6 +76,7 @@ def map_event(event_json):
         'endTime': endTime,
         'location': event_json['location'],
         'organization': event_json['organizationName'],
+        'description': clean_description(event_json.get('description', '')),
         'link': f"https://involvementcenter.unlv.edu/event/{event_json['id']}",
         'imageUrl': f"{IMAGE_URL}{image_path}?preset=med-w" if image_path else "",
     }

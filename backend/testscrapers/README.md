@@ -28,6 +28,17 @@ To run just the academic calendar source check:
 python3 backend/testscrapers/run_academic_calendar_check.py
 ```
 
+To run just the building image source check:
+
+```bash
+python3 backend/testscrapers/run_building_images_check.py
+```
+
+That command writes:
+
+- `backend/testscrapers/output/buildingimages_list.json`
+- `backend/testscrapers/output/buildingimages_summary.json`
+
 To run just the UNLV Today source check:
 
 ```bash

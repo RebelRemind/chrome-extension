@@ -24,16 +24,16 @@ jobs:
           pip install -e .
         working-directory: backend
 
-      - name: Generate static JSON files
-        run: |
-          python backend/export_pages_data.py --output-dir /tmp/rebel-pages-data/data
-
       - name: Checkout GitHub Pages repository
         uses: actions/checkout@v6
         with:
           repository: RebelRemind/RebelRemind.github.io
           token: ${{ secrets.PAGES_REPO_TOKEN }}
           path: pages-repo
+
+      - name: Generate static JSON files
+        run: |
+          python backend/export_pages_data.py --output-dir /tmp/rebel-pages-data/data --fallback-dir pages-repo/data
 
       - name: Copy generated data into Pages repository
         run: |

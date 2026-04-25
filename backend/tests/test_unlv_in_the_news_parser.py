@@ -34,3 +34,26 @@ def test_parse_listing_page_extracts_unlv_in_the_news_cards():
     assert result[0]["section"] == "In The News"
     assert result[0]["summary"] == "Example summary from the listing page."
     assert result[0]["link"] == "https://news3lv.com/news/example-story"
+
+
+def test_parse_listing_page_skips_related_cards_without_publish_dates():
+    html = """
+    <div class="card bg-white views-row">
+      <div class="click-region-link">
+        <a href="https://news3lv.com/news/current-story">Current Story</a>
+      </div>
+      <time datetime="2026-04-24T12:46:05-07:00">April 24, 2026</time>
+      <div><p>Current listing summary.</p></div>
+    </div>
+    <div class="click-region card bg-white views-row">
+      <div class="click-region-link">
+        <a href="/news/article/unlv-newsmakers-2026-march">UNLV Newsmakers 2026: March</a>
+      </div>
+      <div><p>Related story from the You Might Also Like section.</p></div>
+    </div>
+    """
+
+    result = parse_listing_page(html)
+
+    assert len(result) == 1
+    assert result[0]["name"] == "Current Story"

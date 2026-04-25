@@ -4,11 +4,14 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
 from bs4 import BeautifulSoup
+from urllib3.util.retry import Retry
 
 URL = "https://unlvscarletandgray.com/category/news/"
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
-REQUEST_TIMEOUT = (5, 20)
+REQUEST_TIMEOUT = (10, 30)
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
 
 
 def parse_listing_page(html):
@@ -83,10 +86,66 @@ def write_json(output_dir, file_name, payload):
         file_handle.write("\n")
 
 
+def fetch_text(url):
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        backoff_factor=2,
+        status_forcelist=RETRY_STATUS_CODES,
+        allowed_methods=("GET",),
+        respect_retry_after_header=True,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session = requests.Session()
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    try:
+        response = session.get(url, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return response.text
+    finally:
+        session.close()
+
+
+def extract_article_details(html):
+    soup = BeautifulSoup(html, "html.parser")
+    details = {}
+
+    time_node = soup.select_one("time")
+    if time_node:
+        published_at = time_node.get("datetime", "").strip()
+        published_date = time_node.get_text(" ", strip=True)
+        if published_at:
+            details["publishedAt"] = published_at
+        if published_date:
+            details["publishedDate"] = published_date
+
+    published_meta = soup.find("meta", attrs={"property": "article:published_time"})
+    if published_meta and published_meta.get("content") and not details.get("publishedAt"):
+        details["publishedAt"] = published_meta["content"].strip()
+
+    return details
+
+
+def fetch_article_details(item):
+    if item.get("publishedDate") or item.get("publishedAt") or not item.get("link"):
+        return item
+
+    try:
+        details = extract_article_details(fetch_text(item["link"]))
+    except requests.RequestException:
+        return item
+
+    return {**item, **details}
+
+
 def scrape():
-    response = requests.get(URL, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()
-    return parse_listing_page(response.text)
+    items = parse_listing_page(fetch_text(URL))
+    return [fetch_article_details(item) for item in items]
 
 
 def main():

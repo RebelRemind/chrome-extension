@@ -1,10 +1,12 @@
 import re
 from datetime import date, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 from database import BASE
+from webscraping.building_images import parse_listing_page as parse_building_image_listing
 
 # URL of the UNLV event calendar
 URL = "https://www.unlv.edu/calendar"
@@ -160,6 +162,15 @@ PHRASE_BONUSES = {
 PAST_MONTH_WINDOW_DAYS = 90
 FUTURE_WEEK_BUFFER = 1
 DETAIL_FETCH_WORKERS = 8
+BUILDINGS_URL = "https://www.unlv.edu/maps/buildings"
+DEFAULT_EVENT_IMAGE_URL = "/images/UNLV_Logo.png"
+
+# UNLV event pages sometimes use familiar facility abbreviations rather than the
+# map directory's official building code/name. SRWC refers to RWC: Student
+# Recreation & Wellness Center.
+BUILDING_LOCATION_ALIASES = {
+    "srwc": "rwc",
+}
 
 
 def normalize_time_label(raw_time):
@@ -194,7 +205,92 @@ def parse_unlv_detail_time(value):
     return f"{hour}:{minute} {meridiem}"
 
 
-def fetch_event_details(link):
+def read_heading_value(soup, heading_label):
+    heading = soup.find(
+        lambda tag: tag.name in {"h2", "h3", "h4"}
+        and tag.get_text(" ", strip=True) == heading_label
+    )
+    if heading is None:
+        return ""
+
+    value_parts = []
+    sibling = heading.find_next_sibling()
+    while sibling is not None:
+        if sibling.name in {"h2", "h3", "h4"}:
+            break
+        text = sibling.get_text(" ", strip=True)
+        if text:
+            value_parts.append(text)
+        sibling = sibling.find_next_sibling()
+
+    return " ".join(value_parts)
+
+
+def extract_event_image_url(soup):
+    image_meta = (
+        soup.find("meta", property="og:image")
+        or soup.find("meta", attrs={"name": "twitter:image"})
+    )
+    image_url = image_meta.get("content", "").strip() if image_meta else ""
+    if image_url:
+        return urljoin("https://www.unlv.edu", image_url)
+
+    image_node = soup.select_one(".field--name-field-image img[src], article img[src]")
+    if image_node:
+        return urljoin("https://www.unlv.edu", image_node.get("src", "").strip())
+
+    return ""
+
+
+def normalize_location_name(value):
+    normalized = re.sub(r"[^a-z0-9\s]+", " ", (value or "").lower())
+    normalized = re.sub(r"\b(building|hall|center|the|room|rm)\b", " ", normalized)
+    return " ".join(normalized.split())
+
+
+def build_building_image_lookup(items):
+    lookup = {}
+    for item in items:
+        image_link = item.get("image-link", "")
+        if not image_link:
+            continue
+
+        for value in (item.get("bldg-name", ""), item.get("bldg-code", "")):
+            key = normalize_location_name(value)
+            if key:
+                lookup[key] = image_link
+
+    return lookup
+
+
+def resolve_building_image(location, building_image_lookup):
+    location_key = normalize_location_name(location)
+    if not location_key:
+        return ""
+
+    location_key = BUILDING_LOCATION_ALIASES.get(location_key, location_key)
+
+    if location_key in building_image_lookup:
+        return building_image_lookup[location_key]
+
+    for key, image_link in building_image_lookup.items():
+        if len(key) >= 3 and (key in location_key or location_key in key):
+            return image_link
+
+    return ""
+
+
+def fetch_building_images():
+    try:
+        response = requests.get(BUILDINGS_URL, headers=USER_AGENT, timeout=20)
+        response.raise_for_status()
+    except requests.RequestException:
+        return {}
+
+    return build_building_image_lookup(parse_building_image_listing(response.text))
+
+
+def fetch_event_details(link, building_image_lookup=None):
     if not link:
         return {}
 
@@ -207,26 +303,24 @@ def fetch_event_details(link):
     soup = BeautifulSoup(response.text, "html.parser")
     event_details = {}
 
+    image_url = extract_event_image_url(soup)
+    if image_url:
+        event_details["imageUrl"] = image_url
+
     meta_description = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
     description = meta_description.get("content", "").strip() if meta_description else ""
     if description:
         event_details["description"] = description
 
-    when_heading = soup.find(lambda tag: tag.name in {"h2", "h3", "h4"} and tag.get_text(" ", strip=True) == "When")
-    if when_heading is None:
-        return event_details
+    campus_location = read_heading_value(soup, "Campus Location")
+    if campus_location:
+        event_details["campusLocation"] = campus_location
+        if not image_url:
+            building_image = resolve_building_image(campus_location, building_image_lookup or {})
+            if building_image:
+                event_details["imageUrl"] = building_image
 
-    value_parts = []
-    sibling = when_heading.find_next_sibling()
-    while sibling is not None:
-        if sibling.name in {"h2", "h3", "h4"}:
-            break
-        text = sibling.get_text(" ", strip=True)
-        if text:
-            value_parts.append(text)
-        sibling = sibling.find_next_sibling()
-
-    when_text = " ".join(value_parts)
+    when_text = read_heading_value(soup, "When")
     if not when_text:
         return event_details
 
@@ -329,27 +423,28 @@ def parse_events_from_soup(soup):
             "description": "",
             "category": categorize_event(title, ""),
             "link": link,
+            "imageUrl": DEFAULT_EVENT_IMAGE_URL,
         }
         events.append(event_data)
 
     return events
 
 
-def enrich_event_times(events):
-    timed_events = []
+def enrich_event_details(events):
+    linked_events = []
     for event in events:
-        start_time = event.get("startTime", "")
-        if not event.get("link") or not start_time or start_time == "(ALL DAY)":
+        if not event.get("link"):
             continue
-        timed_events.append(event)
+        linked_events.append(event)
 
-    if not timed_events:
+    if not linked_events:
         return events
 
+    building_image_lookup = fetch_building_images()
     future_to_event = {}
     with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
-        for event in timed_events:
-            future = executor.submit(fetch_event_details, event["link"])
+        for event in linked_events:
+            future = executor.submit(fetch_event_details, event["link"], building_image_lookup)
             future_to_event[future] = event
 
         for future in as_completed(future_to_event):
@@ -365,6 +460,8 @@ def enrich_event_times(events):
                 event["endTime"] = detail_time_data["endTime"]
             if detail_time_data.get("description"):
                 event["description"] = detail_time_data["description"]
+            if detail_time_data.get("imageUrl"):
+                event["imageUrl"] = detail_time_data["imageUrl"]
 
             event["category"] = categorize_event(event.get("name", ""), event.get("description", ""))
 
@@ -381,7 +478,7 @@ def scrape():
             continue
 
         soup = BeautifulSoup(response.text, "html.parser")
-        for event in enrich_event_times(parse_events_from_soup(soup)):
+        for event in enrich_event_details(parse_events_from_soup(soup)):
             dedupe_key = (event["name"], event["startDate"], event["startTime"], event["location"])
             if dedupe_key in seen:
                 continue

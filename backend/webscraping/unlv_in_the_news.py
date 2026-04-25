@@ -17,13 +17,16 @@ def parse_listing_page(html):
     results = []
 
     for row in soup.select(".views-row"):
+        time_node = row.find("time")
+        if not time_node:
+            continue
+
         primary_link = row.select_one(".click-region-link > a[href]")
         title = primary_link.get_text(" ", strip=True) if primary_link else ""
         link = primary_link.get("href", "").strip() if primary_link else ""
         if link.startswith("/"):
             link = urljoin(BASE_URL, link)
 
-        time_node = row.find("time")
         published_at = time_node.get("datetime", "").strip() if time_node else ""
         published_date = time_node.get_text(" ", strip=True) if time_node else ""
 

@@ -1,3 +1,5 @@
+import json
+
 from export_pages_data import (
     build_dataset,
     format_time,
@@ -36,10 +38,12 @@ def test_normalize_involvement_center_preserves_iso_dates():
             "endTime": "07:30 PM",
             "organization": "Layer Zero",
             "location": "TBE B174",
+            "description": "Weekly project night.",
             "link": "https://example.com",
         }]
     )
     assert result[0]["startDate"] == "2025-05-05"
+    assert result[0]["description"] == "Weekly project night."
 
 
 def test_normalize_rebel_coverage_converts_us_date():
@@ -51,10 +55,17 @@ def test_normalize_rebel_coverage_converts_us_date():
 
 def test_normalize_unlv_calendar_converts_verbose_date():
     result = normalize_unlv_calendar(
-        [{"name": "Tech Seminar", "startDate": "Tuesday, April 29, 2025", "category": "Tech", "description": "AI workshop"}]
+        [{
+            "name": "Tech Seminar",
+            "startDate": "Tuesday, April 29, 2025",
+            "category": "Tech",
+            "description": "AI workshop",
+            "imageUrl": "https://www.unlv.edu/example.jpg",
+        }]
     )
     assert result[0]["startDate"] == "2025-04-29"
     assert result[0]["description"] == "AI workshop"
+    assert result[0]["imageUrl"] == "https://www.unlv.edu/example.jpg"
 
 
 def test_normalize_unlv_today_converts_publish_date():
@@ -80,3 +91,45 @@ def test_build_dataset_returns_empty_list_when_scraper_fails():
     result = build_dataset("scarletandgraynews_list.json", failing_scraper, lambda items: items)
 
     assert result == []
+
+
+def test_build_dataset_uses_fallback_when_scraper_fails(tmp_path):
+    fallback_dir = tmp_path / "data"
+    fallback_dir.mkdir()
+    fallback_payload = [{"name": "Last published story"}]
+    (fallback_dir / "scarletandgraynews_list.json").write_text(
+        json.dumps(fallback_payload),
+        encoding="utf-8",
+    )
+
+    def failing_scraper():
+        raise TimeoutError("source timed out")
+
+    result = build_dataset(
+        "scarletandgraynews_list.json",
+        failing_scraper,
+        lambda items: items,
+        fallback_dir=fallback_dir,
+    )
+
+    assert result == fallback_payload
+
+
+def test_build_dataset_uses_fallback_when_news_scraper_returns_empty(tmp_path):
+    fallback_dir = tmp_path / "data"
+    fallback_dir.mkdir()
+    fallback_payload = [{"name": "Last published UNLV Today item"}]
+    (fallback_dir / "unlvtoday_list.json").write_text(
+        json.dumps(fallback_payload),
+        encoding="utf-8",
+    )
+
+    result = build_dataset(
+        "unlvtoday_list.json",
+        lambda: [],
+        lambda items: items,
+        fallback_dir=fallback_dir,
+        fallback_if_empty=True,
+    )
+
+    assert result == fallback_payload
