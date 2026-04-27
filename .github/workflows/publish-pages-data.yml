@@ -3,7 +3,8 @@ name: Publish Pages Data
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 12 * * *"
+    # GitHub Actions cron uses UTC. These run at 7 AM, 12 PM, and 5 PM PST.
+    - cron: "0 1,15,20 * * *"
 
 jobs:
   publish-data:
