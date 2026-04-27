@@ -193,8 +193,28 @@ function buildBridgeFallbackEndTime(startDate, startTime, allDay = false) {
 }
 
 function getSavedEventSourceLabel(event) {
+  if (event?.sourceLabel) {
+    return event.sourceLabel;
+  }
+
+  if (event?.sourceKey === "involvementCenter") {
+    return "Involvement Center";
+  }
+
+  if (event?.sourceKey === "unlvCalendar") {
+    return "UNLV Calendar";
+  }
+
+  if (event?.sourceKey === "rebelSports" || event?.sourceKey === "rebelCoverage") {
+    return "Rebel Sports";
+  }
+
   if (event?.sport) {
     return "Rebel Sports";
+  }
+
+  if (event?.organization) {
+    return "Involvement Center";
   }
 
   if (event?.category) {

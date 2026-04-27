@@ -226,6 +226,9 @@ function buildCalendarEventUrl(calendarID, eventID) {
     return `${buildCalendarEventsUrl(calendarID)}/${encodeURIComponent(eventID)}`;
 }
 
+const GOOGLE_CALENDAR_RETRY_DELAYS_MS = [300, 1200];
+const GOOGLE_CALENDAR_RETRY_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
 function logGoogleCalendarFailure(message, details) {
     try {
         console.error(`${message}: ${JSON.stringify(details)}`);
@@ -244,6 +247,47 @@ async function readResponseText(response) {
     } catch (_error) {
         return "";
     }
+}
+
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildGoogleCalendarRequest(token, method, event) {
+    return {
+        method,
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(event)
+    };
+}
+
+async function fetchGoogleCalendar(url, options) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= GOOGLE_CALENDAR_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+            const response = await fetch(url, options);
+            if (!GOOGLE_CALENDAR_RETRY_STATUSES.has(response.status) || attempt === GOOGLE_CALENDAR_RETRY_DELAYS_MS.length) {
+                return response;
+            }
+        } catch (error) {
+            lastError = error;
+            if (attempt === GOOGLE_CALENDAR_RETRY_DELAYS_MS.length) {
+                throw error;
+            }
+        }
+
+        await wait(GOOGLE_CALENDAR_RETRY_DELAYS_MS[attempt]);
+    }
+
+    throw lastError || new Error("Google Calendar request failed");
+}
+
+async function writeCalendarEvent(token, calendarID, event, method, url) {
+    return fetchGoogleCalendar(url, buildGoogleCalendarRequest(token, method, event));
 }
 
 /**
@@ -266,35 +310,62 @@ export function eventHash(title, date) {
  */
 export async function addOrUpdateEvents(token, calendarID, event, existingEventIDs = new Set()) {
     const eventExists = existingEventIDs.has(event.id);
-    const primaryUrl = eventExists
-        ? buildCalendarEventUrl(calendarID, event.id)
-        : buildCalendarEventsUrl(calendarID);
+    const createUrl = buildCalendarEventsUrl(calendarID);
+    const updateUrl = buildCalendarEventUrl(calendarID, event.id);
+    const primaryUrl = eventExists ? updateUrl : createUrl;
     const primaryMethod = eventExists ? "PATCH" : "POST";
 
+    const updateExistingEvent = async (preferredMethod = "PATCH") => {
+        const updateMethods = preferredMethod === "PUT" ? ["PUT"] : ["PATCH", "PUT"];
+        let lastResponse = null;
+        let lastError = null;
+
+        for (const method of updateMethods) {
+            try {
+                const response = await writeCalendarEvent(token, calendarID, event, method, updateUrl);
+
+                if (response.ok) {
+                    return response;
+                }
+
+                lastResponse = response;
+
+                if (response.status === 404) {
+                    return writeCalendarEvent(token, calendarID, event, "POST", createUrl);
+                }
+
+                if (method === "PATCH" && [400, 405].includes(response.status)) {
+                    continue;
+                }
+
+                break;
+            } catch (error) {
+                lastError = error;
+                if (method === "PATCH") {
+                    continue;
+                }
+                throw error;
+            }
+        }
+
+        if (lastResponse) {
+            return lastResponse;
+        }
+
+        throw lastError || new Error("Google Calendar update failed");
+    };
+
     try {
-        const response = await fetch(primaryUrl, {
-            method: primaryMethod,
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(event)
-        });
+        const response = eventExists
+            ? await updateExistingEvent()
+            : await writeCalendarEvent(token, calendarID, event, "POST", primaryUrl);
 
         if (response.ok) {
             return response;
         }
 
         if (response.status === 409 && !eventExists) {
-            const updateUrl = buildCalendarEventUrl(calendarID, event.id);
-            const updateResponse = await fetch(updateUrl, {
-                method: "PATCH",
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(event)
-            });
+            const updateResponse = await updateExistingEvent();
 
             if (!updateResponse.ok) {
                 const errorText = await readResponseText(updateResponse);

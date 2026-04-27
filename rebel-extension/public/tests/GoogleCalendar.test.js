@@ -222,6 +222,40 @@ describe("addOrUpdateEvents", () => {
         await addOrUpdateEvents("test_token", "test_calendarID", testEvent, new Set([testEvent.id]));
         expect(fetch).toHaveBeenCalledTimes(1);
     });
+
+    test("Event update falls back to PUT when PATCH fetch fails", async() => {
+        fetch
+            .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+            .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+            .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+            .mockResolvedValueOnce({
+                ok: true
+            });
+        const testEvent = { summary: "Final Exams", id: "unlvevent2960", description: "Study Hard", location: "", start: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, end: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} };
+
+        await addOrUpdateEvents("test_token", "test_calendarID", testEvent, new Set([testEvent.id]));
+        expect(fetch).toHaveBeenCalledTimes(4);
+        expect(fetch.mock.calls[0][1].method).toBe("PATCH");
+        expect(fetch.mock.calls[3][1].method).toBe("PUT");
+    });
+
+    test("Event update recreates stale existing event IDs", async() => {
+        fetch
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 404,
+                text: async() => "Not found"
+            })
+            .mockResolvedValueOnce({
+                ok: true
+            });
+        const testEvent = { summary: "Final Exams", id: "unlvevent2960", description: "Study Hard", location: "", start: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, end: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} };
+
+        await addOrUpdateEvents("test_token", "test_calendarID", testEvent, new Set([testEvent.id]));
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(fetch.mock.calls[0][1].method).toBe("PATCH");
+        expect(fetch.mock.calls[1][1].method).toBe("POST");
+    });
 });
 
 describe("getExistingEvents", () => {
