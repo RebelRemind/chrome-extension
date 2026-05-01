@@ -79,6 +79,7 @@ beforeEach(() => {
         involvementCenter: true,
         rebelCoverage: true,
         canvasIntegration: false,
+        googleCalendar: false,
         userEvents: false
       },
       involvedClubs: ["AI and Data Science Club"],
@@ -181,6 +182,24 @@ describe('Preferences Component', () => {
     await waitFor(() => {
       expect(chrome.storage.local.get).toHaveBeenCalled();
       expect(global.alert).toHaveBeenCalledWith("Please enter a Canvas Access Token!");
+    });
+  });
+
+  test('saves preferences with Google Calendar enabled', async () => {
+    chrome.storage.sync.get.mockImplementation((_, callback) => {
+      callback({
+        preferences: {
+          googleCalendar: true,
+        }
+      });
+    });
+
+    render(<Preferences />);
+    await waitFor(() => screen.getByText(/Save Preferences/));
+    fireEvent.click(screen.getByText(/Save Preferences/));
+
+    await waitFor(() => {
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: "UPDATE_GOOGLE_CALENDAR" });
     });
   });
 

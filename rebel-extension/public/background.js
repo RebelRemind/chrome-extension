@@ -29,6 +29,9 @@ const PAGES_BRIDGE_SYNC_KEYS = [
 ];
 
 const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC", "savedUNLVEvents", "googleCalendarEvents", "colorList"];
+const CANVAS_ASSIGNMENTS_ALARM = "getAssignments";
+const GOOGLE_CALENDAR_ALARM = "updateGoogleCalendar";
+const BACKGROUND_REFRESH_MINUTES = 30;
 
 function parseFlexibleTimeParts(value) {
   const normalized = String(value || "").trim().toUpperCase();
@@ -444,8 +447,12 @@ function getPagesBridgeState(sendResponse) {
 * Listens for and handles any Chrome alarms.
 */
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name == "getAssignments") { // alarm is triggered, update storage with new assignments
+  if (alarm.name == CANVAS_ASSIGNMENTS_ALARM) { // alarm is triggered, update storage with new assignments
     updateAssignments();
+  }
+
+  if (alarm.name == GOOGLE_CALENDAR_ALARM) {
+    updateGoogleCalendar();
   }
 });
 
@@ -499,7 +506,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     * Starts the alarm that will refresh Canvas assignments in storage.
     */
     case "START_CANVAS_ALARM":
-      chrome.alarms.create("getAssignments", { periodInMinutes: 30 }); // refresh assignment list from Canvas every 30 minutes
+      chrome.alarms.create(CANVAS_ASSIGNMENTS_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES }); // refresh assignment list from Canvas every 30 minutes
       console.log("Canvas Alarm Started");
       break;
     
@@ -507,7 +514,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     * Clears the alarm that refreshes Canvas assignments in storage.
     */
     case "CLEAR_CANVAS_ALARM":
-      chrome.alarms.clear("getAssignments", () => { // delete alarm that refreshes assignments
+      chrome.alarms.clear(CANVAS_ASSIGNMENTS_ALARM, () => { // delete alarm that refreshes assignments
         console.log("getAssignments Alarm Cleared");
       });
       break;
@@ -561,8 +568,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true }); // Confirms successful storage update.
       });
       if (message.preferences?.googleCalendar) {
-        updateGoogleCalendar();
+        chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
+        updateGoogleCalendar({ interactiveAuth: true });
       } else {
+        chrome.alarms.clear(GOOGLE_CALENDAR_ALARM);
         chrome.storage.local.set({ googleCalendarEvents: [] }, () => {
           chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
             if (chrome.runtime.lastError) {
@@ -623,7 +632,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     * Reloads the Google Calendar with updated data.
     */
     case "UPDATE_GOOGLE_CALENDAR":
-      updateGoogleCalendar();
+      chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
+      updateGoogleCalendar({ interactiveAuth: true });
       break;
 
     /**
@@ -671,20 +681,61 @@ function bootstrapCanvasState() {
         return;
       }
 
-      chrome.alarms.create("getAssignments", { periodInMinutes: 30 });
+      chrome.alarms.create(CANVAS_ASSIGNMENTS_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
       updateAssignments();
     });
+  });
+}
+
+function bootstrapGoogleCalendarState() {
+  chrome.storage.sync.get("preferences", (syncData) => {
+    if (!syncData.preferences?.googleCalendar) {
+      chrome.alarms.clear(GOOGLE_CALENDAR_ALARM);
+      return;
+    }
+
+    chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
+    updateGoogleCalendar();
   });
 }
 
 chrome.runtime.onInstalled.addListener(() => {
   initializeColorList();
   bootstrapCanvasState();
+  bootstrapGoogleCalendarState();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   initializeColorList();
   bootstrapCanvasState();
+  bootstrapGoogleCalendarState();
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "sync" || !changes.preferences) {
+    return;
+  }
+
+  const oldGoogleCalendarEnabled = Boolean(changes.preferences.oldValue?.googleCalendar);
+  const newGoogleCalendarEnabled = Boolean(changes.preferences.newValue?.googleCalendar);
+
+  if (oldGoogleCalendarEnabled === newGoogleCalendarEnabled) {
+    return;
+  }
+
+  if (newGoogleCalendarEnabled) {
+    chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
+    updateGoogleCalendar({ interactiveAuth: true });
+  } else {
+    chrome.alarms.clear(GOOGLE_CALENDAR_ALARM);
+    chrome.storage.local.set({ googleCalendarEvents: [] }, () => {
+      chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
+        if (chrome.runtime.lastError) {
+          // handle receiving end does not exist error
+        }
+      });
+    });
+  }
 });
 
 /**
@@ -730,7 +781,7 @@ async function fetchCanvasAssignments() {
   }
 }
 
-async function updateGoogleCalendar() {
+async function updateGoogleCalendar({ interactiveAuth = false } = {}) {
   if (updateGoogleCalendar.inFlight) {
     updateGoogleCalendar.queued = true;
     return false;
@@ -749,7 +800,7 @@ async function updateGoogleCalendar() {
   console.log("UPDATING CALENDAR");
 
   try {
-    const GoogleToken = await getGoogleToken();
+    const GoogleToken = await getGoogleToken(interactiveAuth);
     if (!GoogleToken) {
       console.log("No chrome identity token found.");
       return false;

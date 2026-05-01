@@ -10,11 +10,11 @@
 /**
  * Get the token from Google for Google Calendar access.
  */
-export function getGoogleToken() {
+export function getGoogleToken(interactive = false) {
     return new Promise((resolve) => {
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        chrome.identity.getAuthToken({ interactive }, (token) => {
             if (chrome.runtime.lastError) {
-                console.log("Error getting token");
+                console.log("Error getting token", chrome.runtime.lastError.message || chrome.runtime.lastError);
                 resolve(false);
             }
             else {
@@ -98,10 +98,10 @@ export async function gatherEvents() {
 
     const getCanvas = new Promise((resolve) => {
         chrome.storage.local.get("Canvas_Assignments", (data) => {
-            if (data.Canvas_Assignments) {
+            if (Array.isArray(data.Canvas_Assignments)) {
                 const originalAssignments = data.Canvas_Assignments;
                 const newAssignments = originalAssignments.flatMap((assignment) => {
-                    if (!assignment.due_at) {
+                    if (!assignment?.due_at) {
                         return [];
                     }
                     return [{

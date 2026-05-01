@@ -234,6 +234,9 @@ const Preferences = ({ setupMode = false }) => {
         else {
             chrome.runtime.sendMessage({ type: "CLEAR_CANVAS_ALARM" }); // Stops Canvas alarm if integration is shut off
         }
+        if (preferences.googleCalendar) {
+            chrome.runtime.sendMessage({ type: "UPDATE_GOOGLE_CALENDAR" });
+        }
     };
 
     // Toggle sports

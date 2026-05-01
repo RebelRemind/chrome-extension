@@ -43,6 +43,19 @@ describe("getGoogleToken", () => {
 
         const result = await getGoogleToken();
         expect(result).toBe(token);
+        expect(chrome.identity.getAuthToken).toHaveBeenCalledWith({ interactive: false }, expect.any(Function));
+    });
+
+    test("Can request an interactive token", async() => {
+        const token = "test_token";
+        chrome.identity.getAuthToken.mockImplementation((_, callback) => {
+            chrome.runtime.lastError = null;
+            callback(token);
+        });
+
+        const result = await getGoogleToken(true);
+        expect(result).toBe(token);
+        expect(chrome.identity.getAuthToken).toHaveBeenCalledWith({ interactive: true }, expect.any(Function));
     });
 
     test("Error getting token", async() => {
@@ -137,6 +150,7 @@ describe("gatherEvents", () => {
                 { due_at: "2025-03-31T07:59:59Z", title: "Assignment 1", context_name: "CS 101", id: 1234 }, 
                 { due_at: "2025-04-17T00:29:00Z", title: "Assignment 2", context_name: "CS 102", id: 3485 },
                 { due_at: "2025-04-30T23:29:00Z", title: "Assignment 3", context_name: "CS 103", id: 3092 },
+                null,
                 { due_at: null, title: "Assignment 4", context_name: "CS 104", id: 5928 }
              ]});
         });
