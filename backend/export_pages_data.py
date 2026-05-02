@@ -1,6 +1,7 @@
 import argparse
 import json
 from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
 from pathlib import Path
 import traceback
 
@@ -142,6 +143,14 @@ def write_json(output_dir, file_name, payload):
         file_handle.write("\n")
 
 
+@dataclass
+class DatasetBuildResult:
+    payload: list
+    status: str
+    last_successful_at: str
+    error: str = ""
+
+
 def load_fallback_dataset(fallback_dir, file_name):
     if not fallback_dir:
         return None
@@ -165,98 +174,165 @@ def load_fallback_dataset(fallback_dir, file_name):
     return payload
 
 
-def build_dataset(file_name, scraper, normalizer, fallback_dir=None, fallback_if_empty=False):
+def load_fallback_index(fallback_dir):
+    if not fallback_dir:
+        return {}
+
+    fallback_path = Path(fallback_dir) / "index.json"
+    if not fallback_path.exists():
+        return {}
+
+    try:
+        with fallback_path.open("r", encoding="utf-8") as file_handle:
+            payload = json.load(file_handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[pages-data] Failed to read fallback metadata {fallback_path}: {exc}", flush=True)
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def get_fallback_last_successful_at(fallback_index, file_name):
+    dataset_metadata = fallback_index.get("datasets", {}).get(file_name, {})
+    if isinstance(dataset_metadata, dict) and dataset_metadata.get("lastSuccessfulAt"):
+        return dataset_metadata["lastSuccessfulAt"]
+
+    return ""
+
+
+def build_dataset_result(
+    file_name,
+    scraper,
+    normalizer,
+    fallback_dir=None,
+    fallback_if_empty=False,
+    generated_at=None,
+    fallback_index=None,
+):
+    generated_at = generated_at or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    fallback_index = fallback_index or {}
+
     try:
         payload = normalizer(scraper() or [])
         if payload or not fallback_if_empty:
-            return payload
+            return DatasetBuildResult(payload, "success", generated_at)
 
         fallback_payload = load_fallback_dataset(fallback_dir, file_name)
         if fallback_payload is not None:
             print(f"[pages-data] Built empty {file_name}; keeping last published data.", flush=True)
-            return fallback_payload
+            return DatasetBuildResult(
+                fallback_payload,
+                "fallback",
+                get_fallback_last_successful_at(fallback_index, file_name),
+                "Scraper returned no items.",
+            )
 
-        return payload
+        return DatasetBuildResult(payload, "empty", "")
     except Exception as exc:
         print(f"[pages-data] Failed to build {file_name}: {exc}", flush=True)
         print(traceback.format_exc(), flush=True)
         fallback_payload = load_fallback_dataset(fallback_dir, file_name)
         if fallback_payload is not None:
-            return fallback_payload
-        return []
+            return DatasetBuildResult(
+                fallback_payload,
+                "fallback",
+                get_fallback_last_successful_at(fallback_index, file_name),
+                str(exc),
+            )
+        return DatasetBuildResult([], "failed", "", str(exc))
 
 
-def build_datasets(fallback_dir=None):
-    return {
-        "academiccalendar_list.json": build_dataset(
+def build_dataset(file_name, scraper, normalizer, fallback_dir=None, fallback_if_empty=False):
+    return build_dataset_result(file_name, scraper, normalizer, fallback_dir, fallback_if_empty).payload
+
+
+def build_datasets(fallback_dir=None, generated_at=None):
+    generated_at = generated_at or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    fallback_index = load_fallback_index(fallback_dir)
+    build_args = {
+        "fallback_dir": fallback_dir,
+        "generated_at": generated_at,
+        "fallback_index": fallback_index,
+    }
+    results = {
+        "academiccalendar_list.json": build_dataset_result(
             "academiccalendar_list.json",
             scrape_academic_calendar,
             normalize_academic_calendar,
-            fallback_dir,
+            **build_args,
         ),
-        "buildingimages_list.json": build_dataset(
+        "buildingimages_list.json": build_dataset_result(
             "buildingimages_list.json",
             scrape_building_images,
             normalize_building_images,
-            fallback_dir,
+            **build_args,
         ),
-        "campuswideevents_list.json": build_dataset(
+        "campuswideevents_list.json": build_dataset_result(
             "campuswideevents_list.json",
             scrape_campus_wide_events,
             normalize_campus_wide_events,
-            fallback_dir,
+            **build_args,
         ),
-        "careerevents_list.json": build_dataset(
+        "careerevents_list.json": build_dataset_result(
             "careerevents_list.json",
             scrape_career_events,
             normalize_career_events,
-            fallback_dir,
+            **build_args,
         ),
-        "involvementcenter_list.json": build_dataset(
+        "involvementcenter_list.json": build_dataset_result(
             "involvementcenter_list.json",
             scrape_involvement_center,
             normalize_involvement_center,
-            fallback_dir,
+            **build_args,
         ),
-        "rebelcoverage_list.json": build_dataset(
+        "rebelcoverage_list.json": build_dataset_result(
             "rebelcoverage_list.json",
             scrape_rebel_coverage,
             normalize_rebel_coverage,
-            fallback_dir,
+            **build_args,
         ),
-        "scarletandgraynews_list.json": build_dataset(
+        "scarletandgraynews_list.json": build_dataset_result(
             "scarletandgraynews_list.json",
             scrape_scarlet_and_gray_news,
             normalize_scarlet_and_gray_news,
-            fallback_dir,
+            **build_args,
             fallback_if_empty=True,
         ),
-        "unlvinthenews_list.json": build_dataset(
+        "unlvinthenews_list.json": build_dataset_result(
             "unlvinthenews_list.json",
             scrape_unlv_in_the_news,
             normalize_unlv_in_the_news,
-            fallback_dir,
+            **build_args,
             fallback_if_empty=True,
         ),
-        "unlvcalendar_list.json": build_dataset(
+        "unlvcalendar_list.json": build_dataset_result(
             "unlvcalendar_list.json",
             scrape_unlv_calendar,
             normalize_unlv_calendar,
-            fallback_dir,
+            **build_args,
         ),
-        "unlvtoday_list.json": build_dataset(
+        "unlvtoday_list.json": build_dataset_result(
             "unlvtoday_list.json",
             scrape_unlv_today,
             normalize_unlv_today,
-            fallback_dir,
+            **build_args,
             fallback_if_empty=True,
         ),
-        "organization_list.json": build_dataset(
+        "organization_list.json": build_dataset_result(
             "organization_list.json",
             scrape_organizations,
             normalize_organizations,
-            fallback_dir,
+            **build_args,
         ),
+    }
+    return {file_name: result.payload for file_name, result in results.items()}, {
+        file_name: {
+            "status": result.status,
+            "itemCount": len(result.payload),
+            "lastSuccessfulAt": result.last_successful_at,
+            **({"error": result.error} if result.error else {}),
+        }
+        for file_name, result in results.items()
     }
 
 
@@ -267,14 +343,16 @@ def main():
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    datasets = build_datasets(args.fallback_dir)
+    generated_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    datasets, dataset_metadata = build_datasets(args.fallback_dir, generated_at=generated_at)
 
     for file_name, payload in datasets.items():
         write_json(output_dir, file_name, payload)
 
     metadata = {
-        "generatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "generatedAt": generated_at,
         "files": sorted(datasets.keys()),
+        "datasets": dataset_metadata,
     }
     write_json(output_dir, "index.json", metadata)
 

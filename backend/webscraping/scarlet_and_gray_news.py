@@ -12,6 +12,11 @@ from urllib3.util.retry import Retry
 
 
 URL = "https://unlvscarletandgray.com/category/news/feed/"
+CATEGORY_URL = "https://unlvscarletandgray.com/category/news/"
+FALLBACK_FEED_URLS = [
+    "https://unlvscarletandgray.com/feed/?category_name=news",
+    "https://unlvscarletandgray.com/news/feed/",
+]
 
 USER_AGENT = {
     "User-Agent": (
@@ -21,6 +26,13 @@ USER_AGENT = {
     ),
     "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
     "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Referer": CATEGORY_URL,
+}
+HTML_HEADERS = {
+    **USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
 REQUEST_TIMEOUT = (10, 30)
@@ -145,9 +157,24 @@ def fetch_text(url):
         session.mount("https://", adapter)
         session.mount("http://", adapter)
 
-        response = session.get(url, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        return response.text
+        feed_urls = [url, *[candidate for candidate in FALLBACK_FEED_URLS if candidate != url]]
+        last_error = None
+        for feed_url in feed_urls:
+            try:
+                response = session.get(feed_url, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
+                if response.status_code == 403:
+                    session.get(CATEGORY_URL, headers=HTML_HEADERS, timeout=REQUEST_TIMEOUT)
+                    response = session.get(feed_url, headers=USER_AGENT, timeout=REQUEST_TIMEOUT)
+                response.raise_for_status()
+                return response.text
+            except requests.RequestException as exc:
+                last_error = exc
+                print(f"[scarlet-and-gray] Failed to fetch feed {feed_url}: {exc}", flush=True)
+
+        if last_error:
+            raise last_error
+
+        return ""
 
 
 def scrape():

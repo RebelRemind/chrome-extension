@@ -202,6 +202,62 @@ function AccordionMenu({
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const findCustomEventIndex = (events, event) => {
+      if (Number.isInteger(event?.storageIndex) && events[event.storageIndex]) {
+        return event.storageIndex;
+      }
+
+      return events.findIndex((item) =>
+        item.title === event?.name
+        && item.startDate === event?.startDate
+        && item.startTime === event?.startTime
+      );
+    };
+
+    const handleUpdateCustomEvent = (event, updatedEvent) => {
+      chrome.storage.local.get("userEvents", (data) => {
+        const existing = Array.isArray(data.userEvents) ? data.userEvents : [];
+        const eventIndex = findCustomEventIndex(existing, event);
+        if (eventIndex === -1) {
+          return;
+        }
+
+        const updatedEvents = [...existing];
+        updatedEvents[eventIndex] = updatedEvent;
+
+        chrome.storage.local.set({ userEvents: updatedEvents }, () => {
+          setActiveEventPopup(null);
+          chrome.runtime.sendMessage({ type: "EVENT_UPDATED" });
+        });
+      });
+    };
+
+    const handleArchiveCustomEvent = (event) => {
+      chrome.storage.local.get(["userEvents", "archivedUserEvents"], (data) => {
+        const existing = Array.isArray(data.userEvents) ? data.userEvents : [];
+        const archived = Array.isArray(data.archivedUserEvents) ? data.archivedUserEvents : [];
+        const eventIndex = findCustomEventIndex(existing, event);
+        if (eventIndex === -1) {
+          return;
+        }
+
+        const eventToArchive = existing[eventIndex];
+        const updatedEvents = existing.filter((_, index) => index !== eventIndex);
+        const updatedArchivedEvents = [
+          ...archived,
+          { ...eventToArchive, archivedAt: new Date().toISOString() },
+        ];
+
+        chrome.storage.local.set({
+          userEvents: updatedEvents,
+          archivedUserEvents: updatedArchivedEvents,
+        }, () => {
+          setActiveEventPopup(null);
+          chrome.runtime.sendMessage({ type: "EVENT_UPDATED" });
+        });
+      });
+    };
+
 /***  END USER EVENTS  ***/
 
 /***  DYNAMIC MENU SIZING  ***/
@@ -318,6 +374,8 @@ function AccordionMenu({
           <UserEventPopup
           event={activeEventPopup}
           onClose={() => setActiveEventPopup(null)}
+          onSave={handleUpdateCustomEvent}
+          onArchive={handleArchiveCustomEvent}
           popupRef={popupRef}
           />
         )}

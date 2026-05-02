@@ -144,6 +144,31 @@
   padding: 0;
 }
 
+.sidepanel-card--custom-events {
+  text-align: left;
+  max-height: calc(100vh - 4.5rem);
+  overflow-y: auto;
+}
+
+.sidepanel-card--custom-events .mx-auto.bg-white {
+  margin-top: 0.75rem !important;
+  width: 100%;
+}
+
+.sidepanel-card--custom-events .event-row {
+  width: 100%;
+}
+
+.sidepanel-card--custom-events .text-inputs {
+  margin-left: 0;
+  width: 100%;
+}
+
+.sidepanel-card--custom-events .event-title,
+.sidepanel-card--custom-events .event-desc-input {
+  width: 100%;
+}
+
 .sidepanel-view-more-row {
   display: flex;
   justify-content: center;

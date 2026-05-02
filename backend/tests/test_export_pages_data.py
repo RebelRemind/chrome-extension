@@ -2,6 +2,7 @@ import json
 
 from export_pages_data import (
     build_dataset,
+    build_dataset_result,
     format_time,
     normalize_academic_calendar,
     normalize_involvement_center,
@@ -133,3 +134,83 @@ def test_build_dataset_uses_fallback_when_news_scraper_returns_empty(tmp_path):
     )
 
     assert result == fallback_payload
+
+
+def test_build_dataset_result_records_success_metadata():
+    result = build_dataset_result(
+        "unlvtoday_list.json",
+        lambda: [{"name": "Fresh story"}],
+        lambda items: items,
+        generated_at="2026-05-02T19:00:00Z",
+    )
+
+    assert result.payload == [{"name": "Fresh story"}]
+    assert result.status == "success"
+    assert result.last_successful_at == "2026-05-02T19:00:00Z"
+
+
+def test_build_dataset_result_preserves_fallback_success_timestamp(tmp_path):
+    fallback_dir = tmp_path / "data"
+    fallback_dir.mkdir()
+    fallback_payload = [{"name": "Last published story"}]
+    (fallback_dir / "scarletandgraynews_list.json").write_text(
+        json.dumps(fallback_payload),
+        encoding="utf-8",
+    )
+    (fallback_dir / "index.json").write_text(
+        json.dumps({
+            "generatedAt": "2026-05-02T14:00:00Z",
+            "datasets": {
+                "scarletandgraynews_list.json": {
+                    "lastSuccessfulAt": "2026-05-01T19:00:00Z",
+                },
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    def failing_scraper():
+        raise TimeoutError("source timed out")
+
+    result = build_dataset_result(
+        "scarletandgraynews_list.json",
+        failing_scraper,
+        lambda items: items,
+        fallback_dir=fallback_dir,
+        fallback_index={
+            "generatedAt": "2026-05-02T14:00:00Z",
+            "datasets": {
+                "scarletandgraynews_list.json": {
+                    "lastSuccessfulAt": "2026-05-01T19:00:00Z",
+                },
+            },
+        },
+    )
+
+    assert result.payload == fallback_payload
+    assert result.status == "fallback"
+    assert result.last_successful_at == "2026-05-01T19:00:00Z"
+
+
+def test_build_dataset_result_does_not_use_export_time_as_source_success(tmp_path):
+    fallback_dir = tmp_path / "data"
+    fallback_dir.mkdir()
+    fallback_payload = [{"name": "Last published story"}]
+    (fallback_dir / "scarletandgraynews_list.json").write_text(
+        json.dumps(fallback_payload),
+        encoding="utf-8",
+    )
+
+    def failing_scraper():
+        raise TimeoutError("source timed out")
+
+    result = build_dataset_result(
+        "scarletandgraynews_list.json",
+        failing_scraper,
+        lambda items: items,
+        fallback_dir=fallback_dir,
+        fallback_index={"generatedAt": "2026-05-02T20:55:00Z"},
+    )
+
+    assert result.status == "fallback"
+    assert result.last_successful_at == ""

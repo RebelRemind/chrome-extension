@@ -8,157 +8,11 @@ import requests
 from bs4 import BeautifulSoup
 from database import BASE
 from webscraping.building_images import parse_listing_page as parse_building_image_listing
+from webscraping.categorize_unlv_calendar import categorize_event as categorize_unlv_calendar_event
 
 # URL of the UNLV event calendar
 URL = "https://www.unlv.edu/calendar"
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
-
-INTERESTS = [
-    "Arts",
-    "Academics",
-    "Career",
-    "Culture",
-    "Diversity",
-    "Health",
-    "Social",
-    "Sports",
-    "Tech",
-    "Community",
-]
-
-CATEGORY_KEYWORDS = {
-    "Arts": {
-        "art", "arts", "artist", "gallery", "exhibit", "exhibition", "museum",
-        "music", "concert", "band", "orchestra", "choir", "theater", "theatre",
-        "film", "cinema", "screening", "dance", "poetry", "creative", "design",
-        "fashion", "performance", "visual", "craft", "jazz", "broadcast", "radio",
-        "podcasting", "podcast", "recording", "editing", "audio", "recital",
-        "guitar", "mic",
-    },
-    "Academics": {
-        "academic", "academics", "class", "classes", "course", "courses", "study",
-        "studies", "research", "lecture", "seminar", "symposium", "colloquium",
-        "workshop", "lab", "exam", "midterm", "finals", "orientation",
-        "advising", "tutoring", "curriculum", "faculty", "scholar", "learning",
-        "dissertation", "thesis", "defense", "defenses", "presentation",
-        "presentations", "library", "student", "graduate", "grad", "literacy",
-        "teaching", "webcampus", "gis", "geographic", "information", "systems",
-        "bootcamp", "training", "doctor", "doctoral", "policy", "bsn", "nursing",
-        "licensure", "proposal", "proposals", "publishing", "publish", "tenure",
-        "promotion", "forum", "summit", "education", "mentor", "mentoring",
-        "proseminar", "anthropology", "open", "house",
-    },
-    "Career": {
-        "career", "careers", "resume", "interview", "networking", "employer",
-        "internship", "internships", "job", "jobs", "hiring", "recruiting",
-        "recruitment", "professional", "professionals", "leadership",
-        "entrepreneur", "entrepreneurship", "linkedin", "business", "workforce",
-        "readiness", "representative", "visit", "postgraduate", "post-graduate",
-        "finance", "financial", "aid", "tax", "retire", "retirement", "withholding",
-        "application", "applying",
-    },
-    "Culture": {
-        "culture", "cultural", "heritage", "language", "tradition", "traditions",
-        "global", "international", "multicultural", "festival", "celebration",
-        "history", "diaspora", "filipino", "chinese", "medicine", "lunar",
-        "medieval", "market", "newman",
-    },
-    "Diversity": {
-        "diversity", "equity", "inclusion", "inclusive", "belonging", "identity",
-        "identities", "justice", "advocacy", "allyship", "intersectionality",
-        "women", "latinx", "hispanic", "black", "asian", "pacific", "indigenous",
-        "lgbt", "lgbtq", "pride", "disability", "accessibility", "queer",
-        "veteran", "veterans", "generation", "first-generation", "urm",
-        "sorority", "fraternity",
-    },
-    "Health": {
-        "health", "wellness", "mental", "mindfulness", "fitness", "exercise",
-        "workout", "nutrition", "therapy", "counseling", "self-care", "yoga",
-        "meditation", "medical", "clinic", "stress", "recovery", "sleep",
-        "blood", "cpr", "aed", "first", "aid", "grounding", "centering",
-        "breath", "care", "pilates", "adaptive", "perfectionist", "anxiety",
-        "depression", "aromatherapy", "eating", "narcan", "calm", "mood",
-        "boosting", "coping",
-    },
-    "Social": {
-        "social", "mixer", "meetup", "hangout", "party", "celebration", "game",
-        "games", "trivia", "movie", "welcome", "friendship", "fun", "fest",
-        "reception", "picnic", "bingo", "bites", "coffee", "appreciation",
-        "member", "members", "meeting", "meetings", "hour", "meet", "greet",
-        "dinner", "night", "dark", "fair", "kick", "kickoff", "crafting",
-        "jeopardy", "market", "book", "yarn",
-    },
-    "Sports": {
-        "sport", "sports", "athletic", "athletics", "game", "games", "match",
-        "tournament", "playoff", "practice", "baseball", "basketball", "football",
-        "soccer", "softball", "tennis", "golf", "volleyball", "swimming",
-        "diving", "track", "cross", "run", "running", "rebel", "swim",
-        "bike", "bikes", "scooter", "paddleboard", "snowshoe", "trek",
-        "dogs", "desert", "range", "shoot", "pool",
-    },
-    "Tech": {
-        "tech", "technology", "coding", "code", "programming", "developer",
-        "development", "software", "hardware", "ai", "robotics", "cyber",
-        "cybersecurity", "data", "engineering", "computer", "computing", "hack",
-        "hackathon", "stem", "machine", "science", "webcampus", "gis",
-        "podcasting", "audio", "recording", "editing",
-    },
-    "Community": {
-        "community", "service", "volunteer", "volunteering", "outreach", "cleanup",
-        "donation", "fundraiser", "charity", "support", "neighbors", "civic",
-        "engagement", "drive", "food", "pantry", "prep", "tax", "burrowing",
-        "owl", "clean", "up",
-    },
-}
-
-PHRASE_BONUSES = {
-    "Arts": ("art show", "live music", "film screening", "poetry slam"),
-    "Academics": (
-        "research symposium", "study session", "academic advising",
-        "dissertation defense", "thesis defense", "study night", "online classes",
-        "teaching at unlv", "webcampus", "information session", "gis bootcamp",
-        "geographic information systems", "chemical hygiene", "laboratory safety",
-        "success series", "writing essentials", "faculty awards",
-    ),
-    "Career": (
-        "career fair", "resume workshop", "mock interview", "job fair",
-        "employer visit", "post graduate careers", "financial aid",
-        "tax prep", "retirement", "w-4", "corporate challenge",
-    ),
-    "Culture": (
-        "cultural festival", "heritage month", "international night",
-        "traditional chinese medicine", "global success series",
-        "lunar new year", "night market", "medieval feast",
-    ),
-    "Diversity": (
-        "diversity dialogue", "equity summit", "pride week", "queer mini con",
-        "first generation", "fraternity sorority life", "good trouble",
-    ),
-    "Health": (
-        "mental health", "wellness week", "self care", "fitness class",
-        "blood drive", "guided meditation", "first aid certification",
-        "adaptive perfectionist", "family swim", "grounding and centering",
-        "intuitive eating", "coping with anxiety", "mood boosting", "pilates",
-    ),
-    "Social": (
-        "game night", "welcome week", "ice cream", "movie night",
-        "happy hour", "grad fest", "general member meetings", "bingo bites",
-        "meet and greet", "mid week dinner", "campus kick off", "rebels after dark",
-        "open mic", "blind date with a book",
-    ),
-    "Sports": (
-        "basketball game", "football game", "soccer match", "family swim",
-        "learn to stand up paddleboard", "snowshoe", "bike and scooter", "desert dogs",
-    ),
-    "Tech": (
-        "career in tech", "data science", "computer science", "artificial intelligence",
-        "podcasting 101", "podcasting 102", "audio mixing",
-    ),
-    "Community": (
-        "community service", "food drive", "service day", "volunteer day",
-        "tax prep", "clean up",
-    ),
-}
 
 PAST_MONTH_WINDOW_DAYS = 90
 FUTURE_WEEK_BUFFER = 1
@@ -423,34 +277,17 @@ def fetch_event_details_for_group(events, building_image_lookup=None):
     return {}
 
 
-def normalize_text(text):
-    return re.sub(r"[^a-z0-9\s]+", " ", (text or "").lower()).strip()
+def categorize_event(event_or_name, event_description="", event_location=""):
+    if isinstance(event_or_name, dict):
+        category, _reasons = categorize_unlv_calendar_event(event_or_name)
+        return category
 
-
-def categorize_event(event_name, event_description=""):
-    normalized_name = normalize_text(event_name)
-    normalized_description = normalize_text(event_description)
-    combined_text = " ".join(part for part in [normalized_name, normalized_description] if part).strip()
-
-    if not combined_text:
-        return None
-
-    tokens = set(combined_text.split())
-    category_scores = {category: 0 for category in INTERESTS}
-
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        matches = tokens.intersection(keywords)
-        category_scores[category] += len(matches)
-
-    for category, phrases in PHRASE_BONUSES.items():
-        for phrase in phrases:
-            if phrase in combined_text:
-                category_scores[category] += 2
-
-    best_category = max(category_scores, key=category_scores.get)
-    if category_scores[best_category] == 0:
-        return None
-    return best_category
+    category, _reasons = categorize_unlv_calendar_event({
+        "name": event_or_name,
+        "description": event_description,
+        "location": event_location,
+    })
+    return category
 
 
 def build_week_url(target_date):
@@ -515,10 +352,10 @@ def parse_events_from_soup(soup):
             "endTime": "",
             "location": location,
             "description": "",
-            "category": categorize_event(title, ""),
             "link": link,
             "imageUrl": DEFAULT_EVENT_IMAGE_URL,
         }
+        event_data["category"] = categorize_event(event_data)
         events.append(event_data)
 
     return events
@@ -591,8 +428,10 @@ def enrich_event_details(events):
                     linked_event["description"] = detail_time_data["description"]
                 if detail_time_data.get("imageUrl"):
                     linked_event["imageUrl"] = detail_time_data["imageUrl"]
+                if detail_time_data.get("_imageSource"):
+                    linked_event["_imageSource"] = detail_time_data["_imageSource"]
 
-                linked_event["category"] = categorize_event(linked_event.get("name", ""), linked_event.get("description", ""))
+                linked_event["category"] = categorize_event(linked_event)
 
             if stats["processed"] % 50 == 0 or stats["processed"] == len(events_by_link):
                 log_scraper(
@@ -671,13 +510,15 @@ def scrape():
         )
 
     enriched_events = sorted(enrich_event_details(all_events), key=event_sort_key)
+    event_page_image_count = sum(1 for event in enriched_events if event.get("_imageSource") == "event_page")
+    building_image_count = sum(1 for event in enriched_events if event.get("_imageSource") == "building")
     log_scraper(
         "scrape_finished",
         elapsed=f"{time.monotonic() - started_at:.2f}s",
         events=len(enriched_events),
         descriptions=sum(1 for event in enriched_events if event.get("description")),
-        event_page_images=sum(1 for event in enriched_events if event.get("_imageSource") == "event_page"),
-        building_images=sum(1 for event in enriched_events if event.get("_imageSource") == "building"),
+        event_page_images=event_page_image_count,
+        building_images=building_image_count,
         default_logos=sum(1 for event in enriched_events if event.get("imageUrl") == DEFAULT_EVENT_IMAGE_URL),
     )
     for event in enriched_events:

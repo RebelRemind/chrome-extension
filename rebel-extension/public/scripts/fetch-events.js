@@ -74,7 +74,7 @@ export function subscribeToUserEvents(setUserEvents) {
   loadEvents();
 
   const handleMessage = (message) => {
-    if (message.type === "EVENT_CREATED") {
+    if (message.type === "EVENT_CREATED" || message.type === "EVENT_UPDATED") {
       console.log("🔁 Reloading from background after event update...");
       loadEvents();
     }
@@ -97,7 +97,7 @@ function formatTime(timeStr) {
 }
 
 export function normalizeUserEvents(userEvents) {
-  return userEvents.map((event) => ({
+  return userEvents.map((event, index) => ({
     id: -1,
     name: event.title || "Untitled Event",
     organization: "Your Event",
@@ -111,6 +111,7 @@ export function normalizeUserEvents(userEvents) {
     endTime: event.endTime,
     location: event.location,
     desc: event.desc,
+    storageIndex: index,
   }));
 }
 

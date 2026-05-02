@@ -13,9 +13,9 @@ import { useEffect, useState, useRef } from "react";
  *
  * @returns {JSX.Element} The SidePanelButton component UI.
  */
-function SidePanelButton({ label = "Open Sidebar", className = "" }) {
+function SidePanelButton({ label = "Open Sidebar", className = "", targetTab = "" }) {
   const handleOpenSidePanel = () => {
-    chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL" });
+    chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL", targetTab });
     window.close();
   };
 

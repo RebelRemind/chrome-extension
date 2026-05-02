@@ -70,12 +70,14 @@
   }
   
   .event-time {
-    min-width: 80px;
+    min-width: 92px;
     text-align: right;
     font-weight: 600;
     font-family: "Lato", "Helvetica", "Arial", sans-serif;
     display: flex;
     justify-content: right;
+    align-items: center;
+    white-space: nowrap;
   }
 
   .showCompletedCheckbox {

@@ -17,6 +17,10 @@ function Events({ events, viewMode, setActiveEventPopup = null , yourEvents = fa
     return event.name;
   };
 
+  const getEventDisplayTime = (value) => {
+    return value === "(ALL DAY)" ? "(All Day)" : value;
+  };
+
   const getEventStorageKey = (event) => [
     String(event?.name || "").trim().toLowerCase(),
     String(event?.startDate || "").trim(),
@@ -200,7 +204,7 @@ function handleRemoveEvent(event) {
                         {getEventDisplayName(event)}
                       </span>
                       </a>
-                      <span className="event-time">{event.time /* NOT startTime (unformatted) */}</span> 
+                      <span className="event-time">{getEventDisplayTime(event.time) /* NOT startTime (unformatted) */}</span> 
                   </>
                 ) : (<>
                   <a
@@ -217,7 +221,7 @@ function handleRemoveEvent(event) {
                       {getEventDisplayName(event)}
                     </span>
                     </a>
-                    <span className="event-time">{event.startTime}
+                    <span className="event-time">{getEventDisplayTime(event.startTime)}
                     {(!yourEvents || event.savedUNLVEvent || isInvolvementCenterEvent(event)) && (
                       <div className="tooltip-container">
                       {!yourEvents && !event.savedUNLVEvent && !event.added ? (
@@ -292,7 +296,7 @@ function handleRemoveEvent(event) {
                   {getEventDisplayName(event)}
                 </span>
                 </a>
-                <span className="event-time">{event.time}</span>
+                <span className="event-time">{getEventDisplayTime(event.time)}</span>
             </>
           ) : (<>
             <a
@@ -309,7 +313,7 @@ function handleRemoveEvent(event) {
                 {getEventDisplayName(event)}
               </span>
               </a>
-              <span className="event-time">{event.startTime}
+              <span className="event-time">{getEventDisplayTime(event.startTime)}
               {(!yourEvents || event.savedUNLVEvent || isInvolvementCenterEvent(event)) && (
                 <div className="tooltip-container">
                 {!yourEvents && !event.savedUNLVEvent && !event.added ? (

@@ -303,6 +303,7 @@ function buildBridgeCalendarEvents(localData) {
         location: event.location || "",
         description: event.sport || event.organization || event.category || "",
         link: event.link || "",
+        sourceKey: event.sourceKey || "",
         sourceLabel: getSavedEventSourceLabel(event),
         eventType: "UNLVEvents",
         calendarKey: "extensionEvents",
@@ -612,6 +613,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
      * Opens the side panel and closes the popup`.
      */
     case "OPEN_SIDEPANEL":
+      if (message.targetTab) {
+        chrome.storage.local.set({ sidePanelActiveTab: message.targetTab });
+      }
       openSidePanel(sendResponse);
       return true;
 

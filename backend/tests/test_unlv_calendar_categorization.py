@@ -46,6 +46,19 @@ def test_categorize_event_buckets_lunar_new_year():
     assert categorize_event("Lunar New Year Night Market") == "Culture"
 
 
+def test_categorize_event_uses_recategorizer_title_overrides():
+    assert categorize_event("Paws for a Study Break") == "Health"
+    assert categorize_event("Bike and Scooter Registration") == "Community"
+
+
+def test_categorize_event_accepts_full_event_context():
+    assert categorize_event({
+        "name": "Teaching @ UNLV: Introduction to Teaching with WebCampus",
+        "description": "Faculty workshop for online course facilitation.",
+        "location": "Online",
+    }) == "Academics"
+
+
 def test_extract_event_image_url_prefers_open_graph_image():
     from bs4 import BeautifulSoup
 

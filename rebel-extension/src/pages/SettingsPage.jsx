@@ -198,14 +198,14 @@ export default function SettingsPage() {
                         </small>
                     </div>
                     <small style={{ marginTop: '1rem' }}>
-                        View the project repository on{' '}
+                        Learn More:{' '}
                         <a
-                            href="https://github.com/UNLV-CS472-672/2025-S-GROUP3-RebelRemind"
+                            href="https://rebelremind.com/contributors"
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ color: '#646cff' }}
                         >
-                            GitHub
+                            Contributors Page
                         </a>
                         .
                     </small>

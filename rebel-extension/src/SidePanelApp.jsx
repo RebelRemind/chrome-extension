@@ -1,6 +1,8 @@
 import "./SidePanelApp.css";
 import AccordionMenu from "./components/AccordionMenu";
 import CalendarView from "./components/CalendarView";
+import UserEventInput from "./components/UserEventInput";
+import UserEventList from "./components/UserEventList";
 import { useState } from "react";
 import { useEffect } from "react"
 
@@ -15,6 +17,37 @@ function SidePanelApp() {
   const handleViewMoreEvents = () => {
     chrome.tabs.create({ url: UNLV_CALENDAR_DATASET_URL });
   };
+
+  useEffect(() => {
+    const validTabs = new Set(["home", "calendar", "customEvents"]);
+    chrome.storage.local.get("sidePanelActiveTab", (data) => {
+      if (validTabs.has(data.sidePanelActiveTab)) {
+        setActiveTab(data.sidePanelActiveTab);
+        chrome.storage.local.remove("sidePanelActiveTab");
+      }
+    });
+
+    const handleTabMessage = (message) => {
+      if (message.type === "SET_SIDEPANEL_TAB" && validTabs.has(message.targetTab)) {
+        setActiveTab(message.targetTab);
+      }
+    };
+
+    const handleStorageChange = (changes, areaName) => {
+      const nextTab = changes.sidePanelActiveTab?.newValue;
+      if (areaName === "local" && validTabs.has(nextTab)) {
+        setActiveTab(nextTab);
+        chrome.storage.local.remove("sidePanelActiveTab");
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleTabMessage);
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleTabMessage);
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     const applyGradient = (baseColor) => {
@@ -78,6 +111,13 @@ function SidePanelApp() {
         >
           Calendar
         </button>
+        <button
+          type="button"
+          className={`sidepanel-tab ${activeTab === "customEvents" ? "is-active" : ""}`}
+          onClick={() => setActiveTab("customEvents")}
+        >
+          Custom Events
+        </button>
       </div>
 
       {activeTab === "home" ? (
@@ -97,7 +137,7 @@ function SidePanelApp() {
             </button>
           </div>
         </section>
-      ) : (
+      ) : activeTab === "calendar" ? (
         <section className="sidepanel-card sidepanel-card--calendar">
           <CalendarView />
           <div className="sidepanel-view-more-row sidepanel-view-more-row--calendar">
@@ -109,6 +149,11 @@ function SidePanelApp() {
               View More Events
             </button>
           </div>
+        </section>
+      ) : (
+        <section className="sidepanel-card sidepanel-card--custom-events">
+          <UserEventInput />
+          <UserEventList />
         </section>
       )}
     </div>

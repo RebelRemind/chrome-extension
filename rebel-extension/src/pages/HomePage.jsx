@@ -84,9 +84,9 @@ function HomePage() {
           {showDropdown && (
             <div className="change-view-dropdown" ref={DropdownRef}>
               <button onClick={() => navigate("/user-events")}>
-                Create an Event
+                Custom Events
               </button>
-              <SidePanelButton />
+              <SidePanelButton label="Calendar View" targetTab="calendar" />
               <button onClick={() => navigate("/pomodoro")}>
                 Pomodoro
               </button>
@@ -103,7 +103,7 @@ function HomePage() {
       <div className="popup-action-row">
         <div className="popup-action-button">
           <button type="button" onClick={handleOpenWebsite}>
-            Go to Web
+            Visit Website
           </button>
         </div>
         <SidePanelButton label="Open Sidebar" className="popup-action-button" />
