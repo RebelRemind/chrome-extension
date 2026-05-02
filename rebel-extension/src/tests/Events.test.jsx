@@ -111,6 +111,43 @@ describe('Events component', () => {
     );
   });
 
+  it('removes an Involvement Center event from Your Events', async () => {
+    const involvementCenterEvent = {
+      id: 12,
+      name: 'Club Night',
+      startTime: '5:00 PM',
+      link: 'https://example.com/club-night',
+      organization: 'Chess Club',
+      startDate: '2025-04-21'
+    };
+    global.chrome.storage.local.get.mockImplementation((key, callback) => {
+      if (Array.isArray(key)) {
+        callback({
+          filteredIC: [involvementCenterEvent],
+          removedInvolvementCenterEvents: [],
+        });
+        return;
+      }
+
+      callback({ savedUNLVEvents: [] });
+    });
+
+    global.chrome.storage.local.set.mockImplementation((data, callback) => callback());
+
+    render(<Events events={[involvementCenterEvent]} viewMode="daily" yourEvents />);
+
+    const removeButton = await screen.findByLabelText('remove from calendar');
+    fireEvent.click(removeButton);
+
+    await waitFor(() => {
+      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+        filteredIC: [],
+        removedInvolvementCenterEvents: ['club night::2025-04-21::5:00 pm'],
+      }, expect.any(Function));
+      expect(global.chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: "EVENT_UPDATED" });
+    });
+  });
+
   it('renders academic calendar events correctly', () => {
     const academicEvent = [
       { id: 3, name: 'Finals Week', startDate: '2025-05-10', startTime: '', link: '', academicCalendar: true }

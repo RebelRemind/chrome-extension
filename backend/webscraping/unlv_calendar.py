@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import date, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin
@@ -161,9 +162,17 @@ PHRASE_BONUSES = {
 
 PAST_MONTH_WINDOW_DAYS = 90
 FUTURE_WEEK_BUFFER = 1
-DETAIL_FETCH_WORKERS = 8
+DETAIL_FETCH_WORKERS = 4
+DETAIL_FETCH_ATTEMPTS = 2
+DETAIL_FETCH_TIMEOUT_SECONDS = 20
 BUILDINGS_URL = "https://www.unlv.edu/maps/buildings"
 DEFAULT_EVENT_IMAGE_URL = "/images/UNLV_Logo.png"
+DETAIL_TIME_RANGE_RE = re.compile(
+    r"(?P<start>\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?)"
+    r"\s*(?:to|-|\u2013|\u2014)\s*"
+    r"(?P<end>\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?)",
+    re.I,
+)
 
 # UNLV event pages sometimes use familiar facility abbreviations rather than the
 # map directory's official building code/name. SRWC refers to RWC: Student
@@ -171,6 +180,12 @@ DEFAULT_EVENT_IMAGE_URL = "/images/UNLV_Logo.png"
 BUILDING_LOCATION_ALIASES = {
     "srwc": "rwc",
 }
+
+
+def log_scraper(message, **fields):
+    details = " ".join(f"{key}={value}" for key, value in fields.items())
+    suffix = f" {details}" if details else ""
+    print(f"[unlv-calendar] {message}{suffix}", flush=True)
 
 
 def normalize_time_label(raw_time):
@@ -203,6 +218,36 @@ def parse_unlv_detail_time(value):
     minute = match.group(2) or "00"
     meridiem = match.group(3).upper()
     return f"{hour}:{minute} {meridiem}"
+
+
+def parse_unlv_detail_time_range(value):
+    match = DETAIL_TIME_RANGE_RE.search(" ".join((value or "").split()))
+    if not match:
+        return "", ""
+
+    return (
+        parse_unlv_detail_time(match.group("start")),
+        parse_unlv_detail_time(match.group("end")),
+    )
+
+
+def canonical_event_link(link):
+    return (link or "").split("?", 1)[0]
+
+
+def parse_listing_date(value):
+    try:
+        return datetime.strptime(value, "%A, %B %d, %Y").date()
+    except (TypeError, ValueError):
+        return date.max
+
+
+def event_sort_key(event):
+    return (
+        parse_listing_date(event.get("startDate", "")),
+        normalize_time_label(event.get("startTime", "")),
+        event.get("name", ""),
+    )
 
 
 def read_heading_value(soup, heading_label):
@@ -281,31 +326,61 @@ def resolve_building_image(location, building_image_lookup):
 
 
 def fetch_building_images():
+    started_at = time.monotonic()
     try:
         response = requests.get(BUILDINGS_URL, headers=USER_AGENT, timeout=20)
         response.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        log_scraper(
+            "building_images_failed",
+            elapsed=f"{time.monotonic() - started_at:.2f}s",
+            error=type(exc).__name__,
+        )
         return {}
 
-    return build_building_image_lookup(parse_building_image_listing(response.text))
+    lookup = build_building_image_lookup(parse_building_image_listing(response.text))
+    log_scraper(
+        "building_images_loaded",
+        elapsed=f"{time.monotonic() - started_at:.2f}s",
+        entries=len(lookup),
+    )
+    return lookup
 
 
 def fetch_event_details(link, building_image_lookup=None):
     if not link:
         return {}
 
-    try:
-        response = requests.get(link, headers=USER_AGENT, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException:
+    soup = None
+    for attempt in range(1, DETAIL_FETCH_ATTEMPTS + 1):
+        started_at = time.monotonic()
+        try:
+            response = requests.get(link, headers=USER_AGENT, timeout=DETAIL_FETCH_TIMEOUT_SECONDS)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            log_scraper(
+                "detail_fetch_failed",
+                attempt=attempt,
+                elapsed=f"{time.monotonic() - started_at:.2f}s",
+                error=type(exc).__name__,
+                link=link,
+            )
+            continue
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        break
+
+    if soup is None:
+        log_scraper("detail_fetch_gave_up", attempts=DETAIL_FETCH_ATTEMPTS, link=link)
         return {}
 
-    soup = BeautifulSoup(response.text, "html.parser")
     event_details = {}
+    image_source = ""
 
     image_url = extract_event_image_url(soup)
     if image_url:
         event_details["imageUrl"] = image_url
+        image_source = "event_page"
 
     meta_description = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
     description = meta_description.get("content", "").strip() if meta_description else ""
@@ -319,17 +394,16 @@ def fetch_event_details(link, building_image_lookup=None):
             building_image = resolve_building_image(campus_location, building_image_lookup or {})
             if building_image:
                 event_details["imageUrl"] = building_image
+                image_source = "building"
+
+    if image_source:
+        event_details["_imageSource"] = image_source
 
     when_text = read_heading_value(soup, "When")
     if not when_text:
         return event_details
 
-    parts = [segment.strip() for segment in when_text.split(" to ", 1)]
-    if len(parts) != 2:
-        return event_details
-
-    start_time = parse_unlv_detail_time(parts[0])
-    end_time = parse_unlv_detail_time(parts[1])
+    start_time, end_time = parse_unlv_detail_time_range(when_text)
     if not end_time:
         return event_details
 
@@ -338,6 +412,15 @@ def fetch_event_details(link, building_image_lookup=None):
         "endTime": end_time,
     })
     return event_details
+
+
+def fetch_event_details_for_group(events, building_image_lookup=None):
+    for event in events[:3]:
+        event_details = fetch_event_details(event.get("link", ""), building_image_lookup)
+        if event_details.get("description") or event_details.get("imageUrl") or event_details.get("endTime"):
+            return event_details
+
+    return {}
 
 
 def normalize_text(text):
@@ -383,9 +466,20 @@ def iter_week_urls():
     end_week = current_week_start + timedelta(weeks=FUTURE_WEEK_BUFFER)
 
     week_start = start_week
+    current_and_future_weeks = []
+    recent_past_weeks = []
     while week_start <= end_week:
-        yield build_week_url(week_start)
+        if week_start >= current_week_start:
+            current_and_future_weeks.append(week_start)
+        else:
+            recent_past_weeks.append(week_start)
         week_start += timedelta(weeks=1)
+
+    for week_start in current_and_future_weeks:
+        yield build_week_url(week_start)
+
+    for week_start in reversed(recent_past_weeks):
+        yield build_week_url(week_start)
 
 
 def parse_events_from_soup(soup):
@@ -431,61 +525,164 @@ def parse_events_from_soup(soup):
 
 
 def enrich_event_details(events):
-    linked_events = []
+    events_by_link = {}
     for event in events:
         if not event.get("link"):
             continue
-        linked_events.append(event)
+        events_by_link.setdefault(canonical_event_link(event["link"]), []).append(event)
 
-    if not linked_events:
+    if not events_by_link:
         return events
 
+    started_at = time.monotonic()
     building_image_lookup = fetch_building_images()
+    log_scraper(
+        "detail_enrichment_started",
+        events=len(events),
+        detail_groups=len(events_by_link),
+        workers=DETAIL_FETCH_WORKERS,
+    )
     future_to_event = {}
+    stats = {
+        "processed": 0,
+        "description": 0,
+        "event_page_image": 0,
+        "building_image": 0,
+        "default_logo": 0,
+        "empty_detail": 0,
+    }
     with ThreadPoolExecutor(max_workers=DETAIL_FETCH_WORKERS) as executor:
-        for event in linked_events:
-            future = executor.submit(fetch_event_details, event["link"], building_image_lookup)
+        for linked_events in events_by_link.values():
+            event = linked_events[0]
+            future = executor.submit(fetch_event_details_for_group, linked_events, building_image_lookup)
             future_to_event[future] = event
 
         for future in as_completed(future_to_event):
             event = future_to_event[future]
+            linked_events = events_by_link.get(canonical_event_link(event.get("link", "")), [event])
             try:
                 detail_time_data = future.result()
-            except Exception:
+            except Exception as exc:
+                log_scraper(
+                    "detail_group_failed",
+                    error=type(exc).__name__,
+                    link=event.get("link", ""),
+                )
                 detail_time_data = {}
 
-            if detail_time_data.get("startTime"):
-                event["startTime"] = detail_time_data["startTime"]
-            if detail_time_data.get("endTime"):
-                event["endTime"] = detail_time_data["endTime"]
+            stats["processed"] += 1
+            if not detail_time_data:
+                stats["empty_detail"] += 1
             if detail_time_data.get("description"):
-                event["description"] = detail_time_data["description"]
-            if detail_time_data.get("imageUrl"):
-                event["imageUrl"] = detail_time_data["imageUrl"]
+                stats["description"] += len(linked_events)
+            if detail_time_data.get("_imageSource") == "event_page":
+                stats["event_page_image"] += len(linked_events)
+            elif detail_time_data.get("_imageSource") == "building":
+                stats["building_image"] += len(linked_events)
+            else:
+                stats["default_logo"] += len(linked_events)
 
-            event["category"] = categorize_event(event.get("name", ""), event.get("description", ""))
+            for linked_event in linked_events:
+                if detail_time_data.get("startTime"):
+                    linked_event["startTime"] = detail_time_data["startTime"]
+                if detail_time_data.get("endTime"):
+                    linked_event["endTime"] = detail_time_data["endTime"]
+                if detail_time_data.get("description"):
+                    linked_event["description"] = detail_time_data["description"]
+                if detail_time_data.get("imageUrl"):
+                    linked_event["imageUrl"] = detail_time_data["imageUrl"]
 
+                linked_event["category"] = categorize_event(linked_event.get("name", ""), linked_event.get("description", ""))
+
+            if stats["processed"] % 50 == 0 or stats["processed"] == len(events_by_link):
+                log_scraper(
+                    "detail_enrichment_progress",
+                    processed=f"{stats['processed']}/{len(events_by_link)}",
+                    elapsed=f"{time.monotonic() - started_at:.2f}s",
+                    descriptions=stats["description"],
+                    event_page_images=stats["event_page_image"],
+                    building_images=stats["building_image"],
+                    default_logos=stats["default_logo"],
+                    empty_details=stats["empty_detail"],
+                )
+
+    log_scraper(
+        "detail_enrichment_finished",
+        elapsed=f"{time.monotonic() - started_at:.2f}s",
+        descriptions=stats["description"],
+        event_page_images=stats["event_page_image"],
+        building_images=stats["building_image"],
+        default_logos=stats["default_logo"],
+        empty_details=stats["empty_detail"],
+    )
     return events
 
 
 def scrape():
+    started_at = time.monotonic()
     all_events = []
     seen = set()
+    week_urls = list(iter_week_urls())
+    log_scraper("scrape_started", weeks=len(week_urls), workers=DETAIL_FETCH_WORKERS)
 
-    for week_url in iter_week_urls():
-        response = requests.get(week_url, headers=USER_AGENT, timeout=15)
+    for index, week_url in enumerate(week_urls, start=1):
+        week_started_at = time.monotonic()
+        try:
+            response = requests.get(week_url, headers=USER_AGENT, timeout=15)
+        except requests.RequestException as exc:
+            log_scraper(
+                "week_fetch_failed",
+                week=f"{index}/{len(week_urls)}",
+                elapsed=f"{time.monotonic() - week_started_at:.2f}s",
+                error=type(exc).__name__,
+                url=week_url,
+            )
+            continue
+
         if response.status_code != 200:
+            log_scraper(
+                "week_fetch_skipped",
+                week=f"{index}/{len(week_urls)}",
+                elapsed=f"{time.monotonic() - week_started_at:.2f}s",
+                status=response.status_code,
+                url=week_url,
+            )
             continue
 
         soup = BeautifulSoup(response.text, "html.parser")
-        for event in enrich_event_details(parse_events_from_soup(soup)):
+        parsed_events = parse_events_from_soup(soup)
+        added_count = 0
+        for event in parsed_events:
             dedupe_key = (event["name"], event["startDate"], event["startTime"], event["location"])
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
             all_events.append(event)
+            added_count += 1
 
-    return all_events
+        log_scraper(
+            "week_fetch_finished",
+            week=f"{index}/{len(week_urls)}",
+            elapsed=f"{time.monotonic() - week_started_at:.2f}s",
+            parsed=len(parsed_events),
+            added=added_count,
+            total=len(all_events),
+            url=week_url,
+        )
+
+    enriched_events = sorted(enrich_event_details(all_events), key=event_sort_key)
+    log_scraper(
+        "scrape_finished",
+        elapsed=f"{time.monotonic() - started_at:.2f}s",
+        events=len(enriched_events),
+        descriptions=sum(1 for event in enriched_events if event.get("description")),
+        event_page_images=sum(1 for event in enriched_events if event.get("_imageSource") == "event_page"),
+        building_images=sum(1 for event in enriched_events if event.get("_imageSource") == "building"),
+        default_logos=sum(1 for event in enriched_events if event.get("imageUrl") == DEFAULT_EVENT_IMAGE_URL),
+    )
+    for event in enriched_events:
+        event.pop("_imageSource", None)
+    return enriched_events
 
 def default():
     results = scrape()

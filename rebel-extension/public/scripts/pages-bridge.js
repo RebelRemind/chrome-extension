@@ -20,11 +20,23 @@ function postToPage(origin, type, requestId = null, payload = null) {
   window.postMessage({ type, app: EXTENSION_APP, requestId, payload }, origin);
 }
 
-function requestBridgeState(origin, requestId = null, responseType = "REBEL_REMIND_STATE") {
+function requestBridgeState(origin, requestId = null, responseType = "REBEL_REMIND_STATE", attempt = 0) {
+  if (!isAllowedOrigin(origin)) {
+    return;
+  }
+
   chrome.runtime.sendMessage({ type: "GET_PAGES_BRIDGE_STATE" }, (response) => {
-    if (chrome.runtime.lastError || !response?.success) {
+    const messageError = chrome.runtime.lastError;
+    if (messageError && attempt < 2) {
+      window.setTimeout(() => {
+        requestBridgeState(origin, requestId, responseType, attempt + 1);
+      }, 250 * (attempt + 1));
+      return;
+    }
+
+    if (messageError || !response?.success) {
       postToPage(origin, "REBEL_REMIND_ERROR", requestId, {
-        message: chrome.runtime.lastError?.message || "Failed to load extension state",
+        message: messageError?.message || response?.message || "Failed to load extension state",
       });
       return;
     }
@@ -74,6 +86,10 @@ function getSavedCampusEventKey(event) {
   ].join("::");
 }
 
+function isInvolvementCenterEvent(event) {
+  return event?.sourceKey === "involvementCenter" || event?.sourceLabel === "Involvement Center";
+}
+
 function postEventActionResult(origin, requestId, payload) {
   postToPage(origin, BRIDGE_EVENT_ACTION_RESULT, requestId, payload);
 }
@@ -89,7 +105,7 @@ function updateSavedCampusEvent(origin, requestId, payload, action) {
     return;
   }
 
-  chrome.storage.local.get("savedUNLVEvents", (data) => {
+  chrome.storage.local.get(["savedUNLVEvents", "filteredIC", "removedInvolvementCenterEvents"], (data) => {
     if (chrome.runtime.lastError) {
       postEventActionResult(origin, requestId, {
         success: false,
@@ -103,8 +119,23 @@ function updateSavedCampusEvent(origin, requestId, payload, action) {
     const eventKey = getSavedCampusEventKey(event);
     const withoutEvent = existing.filter((item) => getSavedCampusEventKey(item) !== eventKey);
     const updatedEvents = action === "save" ? [...withoutEvent, event] : withoutEvent;
+    const existingFilteredIC = Array.isArray(data.filteredIC) ? data.filteredIC : [];
+    const existingRemovedIC = Array.isArray(data.removedInvolvementCenterEvents) ? data.removedInvolvementCenterEvents : [];
+    const shouldHideICEvent = action === "remove" && isInvolvementCenterEvent(event);
+    const updatedFilteredIC = shouldHideICEvent
+      ? existingFilteredIC.filter((item) => getSavedCampusEventKey(item) !== eventKey)
+      : existingFilteredIC;
+    const updatedRemovedIC = shouldHideICEvent && !existingRemovedIC.includes(eventKey)
+      ? [...existingRemovedIC, eventKey]
+      : existingRemovedIC;
 
-    chrome.storage.local.set({ savedUNLVEvents: updatedEvents }, () => {
+    const storageUpdate = { savedUNLVEvents: updatedEvents };
+    if (shouldHideICEvent) {
+      storageUpdate.filteredIC = updatedFilteredIC;
+      storageUpdate.removedInvolvementCenterEvents = updatedRemovedIC;
+    }
+
+    chrome.storage.local.set(storageUpdate, () => {
       if (chrome.runtime.lastError) {
         postEventActionResult(origin, requestId, {
           success: false,

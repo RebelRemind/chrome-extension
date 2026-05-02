@@ -25,6 +25,9 @@ describe("filterEvents", () => {
             },
           })),
         },
+        local: {
+          get: jest.fn((keys, callback) => callback({ removedInvolvementCenterEvents: [] })),
+        },
       },
     };
   });
@@ -43,5 +46,26 @@ describe("filterEvents", () => {
     const [, , filteredRC] = await filterEvents("2026-04-13", "daily");
 
     expect(filteredRC).toEqual([{ name: "Football Game", sport: "Football" }]);
+  });
+
+  it("excludes removed Involvement Center events", async () => {
+    global.chrome.storage.local.get.mockImplementation((keys, callback) => callback({
+      removedInvolvementCenterEvents: ["club night::2026-04-13::5:00 pm"],
+    }));
+    fetchEvents.mockResolvedValue([
+      [],
+      [
+        { name: "Club Night", organization: "Chess Club", startDate: "2026-04-13", startTime: "5:00 PM" },
+        { name: "Board Games", organization: "Chess Club", startDate: "2026-04-13", startTime: "6:00 PM" },
+      ],
+      [],
+      [],
+    ]);
+
+    const [, filteredIC] = await filterEvents("2026-04-13", "daily");
+
+    expect(filteredIC).toEqual([
+      { name: "Board Games", organization: "Chess Club", startDate: "2026-04-13", startTime: "6:00 PM" },
+    ]);
   });
 });

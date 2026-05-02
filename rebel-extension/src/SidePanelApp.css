@@ -144,6 +144,41 @@
   padding: 0;
 }
 
+.sidepanel-view-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.9rem;
+}
+
+.sidepanel-view-more-row--calendar {
+  margin-top: 1rem;
+}
+
+.sidepanel-view-more-button {
+  min-height: 2.75rem;
+  border: 1px solid rgba(139, 0, 0, 0.32);
+  border-radius: 1rem;
+  background: #8b0000;
+  color: #ffffff;
+  padding: 0.7rem 1.25rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(139, 0, 0, 0.22);
+  transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.sidepanel-view-more-button:hover {
+  background: #6b0000;
+  border-color: rgba(139, 0, 0, 0.45);
+  box-shadow: 0 14px 28px rgba(139, 0, 0, 0.26);
+  transform: translateY(-1px);
+}
+
+.sidepanel-view-more-button:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 3px;
+}
+
 .accordion-button {
   --bs-accordion-btn-color: black;
   --bs-accordion-btn-bg: gray;

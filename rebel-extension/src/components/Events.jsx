@@ -17,6 +17,20 @@ function Events({ events, viewMode, setActiveEventPopup = null , yourEvents = fa
     return event.name;
   };
 
+  const getEventStorageKey = (event) => [
+    String(event?.name || "").trim().toLowerCase(),
+    String(event?.startDate || "").trim(),
+    String(event?.startTime || "").trim().toLowerCase(),
+  ].join("::");
+
+  const isInvolvementCenterEvent = (event) => Boolean(
+    event?.organization
+    && !event.savedUNLVEvent
+    && !event.googleCalendarEvent
+    && event.link !== "customEvent"
+    && !event.academicCalendar
+  );
+
   useEffect(() => {
     const updateWithStorage = () => {
       chrome.storage.local.get("savedUNLVEvents", (data) => {
@@ -81,6 +95,25 @@ function Events({ events, viewMode, setActiveEventPopup = null , yourEvents = fa
    };
 
 function handleRemoveEvent(event) {
+    if (yourEvents && isInvolvementCenterEvent(event)) {
+      const eventKey = getEventStorageKey(event);
+      chrome.storage.local.get(["filteredIC", "removedInvolvementCenterEvents"], (data) => {
+          const existingFilteredIC = Array.isArray(data["filteredIC"]) ? data["filteredIC"] : [];
+          const existingRemoved = Array.isArray(data["removedInvolvementCenterEvents"]) ? data["removedInvolvementCenterEvents"] : [];
+          const updatedRemoved = existingRemoved.includes(eventKey) ? existingRemoved : [...existingRemoved, eventKey];
+          const updatedFilteredIC = existingFilteredIC.filter((item) => getEventStorageKey(item) !== eventKey);
+
+          chrome.storage.local.set({
+              filteredIC: updatedFilteredIC,
+              removedInvolvementCenterEvents: updatedRemoved,
+          }, () => {
+              setLocalEvents((currentEvents) => currentEvents.filter((item) => getEventStorageKey(item) !== eventKey));
+              chrome.runtime.sendMessage({ type: "EVENT_UPDATED" });
+          });
+      });
+      return;
+    }
+
     chrome.storage.local.get("savedUNLVEvents", (data) => {
         const existing = Array.isArray(data["savedUNLVEvents"]) ? data["savedUNLVEvents"] : [];
 
@@ -185,9 +218,9 @@ function handleRemoveEvent(event) {
                     </span>
                     </a>
                     <span className="event-time">{event.startTime}
-                    {(!yourEvents || event.savedUNLVEvent) && (
+                    {(!yourEvents || event.savedUNLVEvent || isInvolvementCenterEvent(event)) && (
                       <div className="tooltip-container">
-                      {!event.savedUNLVEvent && !event.added ? (
+                      {!yourEvents && !event.savedUNLVEvent && !event.added ? (
                         // Show Add to Calendar
                         <button
                           className="addCalbtn"
@@ -208,7 +241,7 @@ function handleRemoveEvent(event) {
                       )}
                       {/* Tooltip text */}
                       <span className="tooltip-text">
-                        {!event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
+                        {!yourEvents && !event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
                       </span>
                     </div>                    
                     )}
@@ -277,9 +310,9 @@ function handleRemoveEvent(event) {
               </span>
               </a>
               <span className="event-time">{event.startTime}
-              {(!yourEvents || event.savedUNLVEvent) && (
+              {(!yourEvents || event.savedUNLVEvent || isInvolvementCenterEvent(event)) && (
                 <div className="tooltip-container">
-                {!event.savedUNLVEvent && !event.added ? (
+                {!yourEvents && !event.savedUNLVEvent && !event.added ? (
                   // Show Add to Calendar
                   <button
                     className="addCalbtn"
@@ -300,7 +333,7 @@ function handleRemoveEvent(event) {
                 )}
                 {/* Tooltip text */}
                 <span className="tooltip-text">
-                  {!event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
+                  {!yourEvents && !event.savedUNLVEvent && !event.added ? "Add to Your Events" : "Remove from Your Events"}
                 </span>
               </div>              
               )}

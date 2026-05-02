@@ -434,7 +434,23 @@ function buildPagesBridgePayload(syncData, localData) {
 
 function getPagesBridgeState(sendResponse) {
   chrome.storage.sync.get(PAGES_BRIDGE_SYNC_KEYS, (syncData) => {
+    if (chrome.runtime.lastError) {
+      sendResponse({
+        success: false,
+        message: chrome.runtime.lastError.message || "Could not read synced extension state.",
+      });
+      return;
+    }
+
     chrome.storage.local.get(PAGES_BRIDGE_LOCAL_KEYS, (localData) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({
+          success: false,
+          message: chrome.runtime.lastError.message || "Could not read local extension state.",
+        });
+        return;
+      }
+
       sendResponse({
         success: true,
         payload: buildPagesBridgePayload(syncData, localData),

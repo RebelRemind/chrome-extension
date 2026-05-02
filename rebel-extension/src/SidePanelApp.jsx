@@ -4,11 +4,17 @@ import CalendarView from "./components/CalendarView";
 import { useState } from "react";
 import { useEffect } from "react"
 
+const UNLV_CALENDAR_DATASET_URL = "https://rebelremind.github.io/datasets/unlvCalendar";
+
 /**
  * Side Panel UI Layout for the Chrome Extension.
  */
 function SidePanelApp() {
   const [activeTab, setActiveTab] = useState("home");
+
+  const handleViewMoreEvents = () => {
+    chrome.tabs.create({ url: UNLV_CALENDAR_DATASET_URL });
+  };
 
   useEffect(() => {
     const applyGradient = (baseColor) => {
@@ -81,10 +87,28 @@ function SidePanelApp() {
             <h2 className="sidepanel-card-title">Everything in one place.</h2>
           </div>
           <AccordionMenu containerHeight={650} className="sidepanel-accordion-menu" />
+          <div className="sidepanel-view-more-row">
+            <button
+              type="button"
+              className="sidepanel-view-more-button"
+              onClick={handleViewMoreEvents}
+            >
+              View More Events
+            </button>
+          </div>
         </section>
       ) : (
         <section className="sidepanel-card sidepanel-card--calendar">
           <CalendarView />
+          <div className="sidepanel-view-more-row sidepanel-view-more-row--calendar">
+            <button
+              type="button"
+              className="sidepanel-view-more-button"
+              onClick={handleViewMoreEvents}
+            >
+              View More Events
+            </button>
+          </div>
         </section>
       )}
     </div>
