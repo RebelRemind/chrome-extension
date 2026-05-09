@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useState } from "react";
 
 /**
  * Side Panel Button Component - Opens Rebel Remind side panel
@@ -14,9 +14,31 @@ import { useEffect, useState, useRef } from "react";
  * @returns {JSX.Element} The SidePanelButton component UI.
  */
 function SidePanelButton({ label = "Open Sidebar", className = "", targetTab = "" }) {
+  const [error, setError] = useState("");
+
   const handleOpenSidePanel = () => {
-    chrome.runtime.sendMessage({ type: "OPEN_SIDEPANEL", targetTab });
-    window.close();
+    setError("");
+
+    try {
+      const message = targetTab
+        ? { type: "OPEN_SIDEPANEL", targetTab }
+        : { type: "OPEN_SIDEPANEL" };
+
+      chrome.runtime.sendMessage(message, () => {
+        if (chrome.runtime.lastError) {
+          setError(chrome.runtime.lastError.message || "Reopen Rebel Remind and try again.");
+          return;
+        }
+
+        window.close();
+      });
+    } catch (sendError) {
+      setError(
+        String(sendError?.message || "").includes("Extension context invalidated")
+          ? "Rebel Remind was reloaded. Reopen the extension and try again."
+          : sendError?.message || "Reopen Rebel Remind and try again."
+      );
+    }
   };
 
   return (
@@ -24,6 +46,7 @@ function SidePanelButton({ label = "Open Sidebar", className = "", targetTab = "
       <button onClick={handleOpenSidePanel}>
         {label}
       </button>
+      {error ? <p className="side-panel-button-error">{error}</p> : null}
     </div>
   );
 }

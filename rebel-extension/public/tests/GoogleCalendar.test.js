@@ -173,8 +173,8 @@ describe("gatherEvents", () => {
 
         const result = await gatherEvents();
         expect(result).toEqual([
-            { summary: "Birthday Party", id: expect.any(String), description: "Tom's Birthday Party, don't forget a present", location: "Tom's House", start: { dateTime: "2025-04-30T20:00:00", timeZone: "America/Los_Angeles" }, end: { dateTime: "2025-04-30T22:00:00", timeZone: "America/Los_Angeles"}, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
-            { summary: "Final Exams", id: expect.any(String), description: "Study Hard", location: "", start: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, end: { date: "2025-04-28", timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
+            { summary: "Birthday Party", id: expect.any(String), status: "confirmed", description: "Tom's Birthday Party, don't forget a present", location: "Tom's House", start: { dateTime: (new Date("2025-04-30 20:00")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-04-30 22:00")).toISOString(), timeZone: "America/Los_Angeles"}, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "Final Exams", id: expect.any(String), status: "confirmed", description: "Study Hard", location: "", start: { date: "2025-04-28" }, end: { date: "2025-04-29" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
         ]);
     });
 
@@ -187,7 +187,7 @@ describe("gatherEvents", () => {
 
         const result = await gatherEvents();
         expect(result).toEqual([
-            { summary: "Monthly Meeting", description: "Layer Zero", location: "TBE B174", id: expect.any(String), start: { dateTime: (new Date("2025-05-05 5:30 PM")).toISOString() }, end: { dateTime: (new Date("2025-05-05 7:30 PM")).toISOString() }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
+            { summary: "Monthly Meeting", description: "Layer Zero", id: expect.any(String), status: "confirmed", location: "TBE B174", start: { dateTime: (new Date("2025-05-05 5:30 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-05 7:30 PM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
         ]);
     });
 
@@ -196,15 +196,23 @@ describe("gatherEvents", () => {
             callback({ savedUNLVEvents: [
                 { name: "Tech Seminar", location: "CHB A106", startDate: "2025-04-29", startTime: "2:30 PM", endDate: "2025-04-29", endTime: "6:30 PM" },
                 { name: "School Holiday", location: "", startDate: "2025-05-07", startTime: "(ALL DAY)", endTime: "", endDate: "2025-05-07" },
-                { name: "Baseball at San Jose State", location: null, startDate: "2025-05-02", startTime: "2:05 PM", endTime: "", endDate: "2025-05-02" }
+                { name: "Baseball at San Jose State", location: null, startDate: "2025-05-02", startTime: "2:05 PM", endTime: "", endDate: "2025-05-02" },
+                { name: "Late Night Event", location: "SU", startDate: "2025-05-07", startTime: "9:00 PM", endDate: "2025-05-08", endTime: "12:00 AM" },
+                { name: "True Overnight Event", location: "SRWC", startDate: "2025-05-07", startTime: "9:00 PM", endDate: "2025-05-08", endTime: "2:00 AM" },
+                { name: "Implicit Overnight Event", location: "Library", startDate: "2025-05-07", startTime: "9:00 PM", endDate: "2025-05-07", endTime: "2:00 AM" },
+                { name: "Multi-Day Midnight Event", location: "CBC", startDate: "2025-05-07", startTime: "9:00 PM", endDate: "2025-05-09", endTime: "12:00 AM" }
              ]});
         });
 
         const result = await gatherEvents();
         expect(result).toEqual([
-            { summary: "Tech Seminar", id: expect.any(String), location: "CHB A106", start: { dateTime: (new Date("2025-04-29 2:30 PM")).toISOString() }, end: { dateTime: (new Date("2025-04-29 6:30 PM")).toISOString() }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
-            { summary: "School Holiday", location: "", id: expect.any(String), start: { date: "2025-05-07" }, end: { date: "2025-05-07" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
-            { summary: "Baseball at San Jose State", id: expect.any(String), location: null, start: { dateTime: (new Date("2025-05-02 2:05 PM")).toISOString() }, end: { dateTime: (new Date("2025-05-02 2:05 PM")).toISOString() }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
+            { summary: "Tech Seminar", id: expect.any(String), status: "confirmed", location: "CHB A106", start: { dateTime: (new Date("2025-04-29 2:30 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-04-29 6:30 PM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "School Holiday", status: "confirmed", location: "", id: expect.any(String), start: { date: "2025-05-07" }, end: { date: "2025-05-08" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "Baseball at San Jose State", id: expect.any(String), status: "confirmed", location: null, start: { dateTime: (new Date("2025-05-02 2:05 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-02 3:05 PM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "Late Night Event", id: expect.any(String), status: "confirmed", location: "SU", start: { dateTime: (new Date("2025-05-07 9:00 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-07 11:59 PM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "True Overnight Event", id: expect.any(String), status: "confirmed", location: "SRWC", start: { dateTime: (new Date("2025-05-07 9:00 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-08 2:00 AM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "Implicit Overnight Event", id: expect.any(String), status: "confirmed", location: "Library", start: { dateTime: (new Date("2025-05-07 9:00 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-08 2:00 AM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} },
+            { summary: "Multi-Day Midnight Event", id: expect.any(String), status: "confirmed", location: "CBC", start: { dateTime: (new Date("2025-05-07 9:00 PM")).toISOString(), timeZone: "America/Los_Angeles" }, end: { dateTime: (new Date("2025-05-08 11:59 PM")).toISOString(), timeZone: "America/Los_Angeles" }, extendedProperties: { private: { managedBy: "Rebel Remind" }} }
         ]);
     });
 });
@@ -366,6 +374,48 @@ describe("syncCalendar", () => {
 
         await syncCalendar(testEvents, "test_token", "test_calendarID");
         expect(fetch).toHaveBeenCalledTimes(4);
+    });
+
+    test("Revives a cancelled Rebel Remind event", async() => {
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            json: async() => ({ items: [
+                {
+                    summary: "Late Night Breakfast",
+                    id: "unlvevent1553611352",
+                    status: "cancelled",
+                    start: { dateTime: (new Date("2026-05-07 9:00 PM")).toISOString() },
+                    end: { dateTime: (new Date("2026-05-07 11:59 PM")).toISOString() },
+                    extendedProperties: { private: { managedBy: "Rebel Remind", rebelRemindSyncHash: "already-matching" } }
+                }
+            ]})
+        });
+        fetch.mockResolvedValueOnce({
+            ok: true
+        });
+
+        const testEvents = [
+            {
+                summary: "Late Night Breakfast",
+                id: "unlvevent1553611352",
+                status: "confirmed",
+                location: "Pida Plaza",
+                start: { dateTime: (new Date("2026-05-07 9:00 PM")).toISOString(), timeZone: "America/Los_Angeles" },
+                end: { dateTime: (new Date("2026-05-07 11:59 PM")).toISOString(), timeZone: "America/Los_Angeles" },
+                extendedProperties: { private: { managedBy: "Rebel Remind" } }
+            }
+        ];
+
+        await syncCalendar(testEvents, "test_token", "test_calendarID");
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(fetch).toHaveBeenNthCalledWith(
+            2,
+            "https://www.googleapis.com/calendar/v3/calendars/test_calendarID/events/unlvevent1553611352",
+            expect.objectContaining({
+                method: "PATCH",
+                body: expect.stringContaining('"status":"confirmed"')
+            })
+        );
     });
 });
 

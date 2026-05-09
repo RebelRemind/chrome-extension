@@ -14,7 +14,7 @@
 import { authenticateUser } from "./scripts/identity-script.js";
 import { getAssignments, getCourses, getCanvasPAT } from "./scripts/canvas-script.js";
 import { openSidePanel } from "./scripts/sidepanel.js";
-import { getGoogleToken, syncCalendar, getCalendarID, getOrCreateCalendar, gatherEvents, checkCalendarExists, importGoogleCalendarEvents } from "./scripts/GoogleCalendar.js";
+import { getGoogleToken, clearGoogleToken, isGoogleCalendarAuthError, syncCalendar, getCalendarID, getOrCreateCalendar, gatherEvents, checkCalendarExists, importGoogleCalendarEvents } from "./scripts/GoogleCalendar.js";
 import { alarmInstall, storageListener, chromeStartUpListener, dailyAlarmListener, onClickNotification} from "./scripts/notifications.js";
 
 const PAGES_BRIDGE_SYNC_KEYS = [
@@ -32,6 +32,7 @@ const PAGES_BRIDGE_LOCAL_KEYS = ["userEvents", "Canvas_Assignments", "filteredIC
 const CANVAS_ASSIGNMENTS_ALARM = "getAssignments";
 const GOOGLE_CALENDAR_ALARM = "updateGoogleCalendar";
 const BACKGROUND_REFRESH_MINUTES = 30;
+const GOOGLE_CALENDAR_USER_ACTION_DEBOUNCE_MS = 60 * 1000;
 
 function parseFlexibleTimeParts(value) {
   const normalized = String(value || "").trim().toUpperCase();
@@ -469,7 +470,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 
   if (alarm.name == GOOGLE_CALENDAR_ALARM) {
-    updateGoogleCalendar();
+    updateGoogleCalendar({ includeImport: true });
   }
 });
 
@@ -565,6 +566,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       getPagesBridgeState(sendResponse);
       return true;
 
+    case "DEBUG_GOOGLE_CALENDAR_PAYLOAD":
+      gatherEvents()
+        .then((events) => {
+          const query = String(message.query || "").trim().toLowerCase();
+          const matches = query
+            ? events.filter((event) => [
+                event.summary,
+                event.description,
+                event.location,
+                event.id,
+              ].some((value) => String(value || "").toLowerCase().includes(query)))
+            : events;
+
+          sendResponse({
+            success: true,
+            total: events.length,
+            count: matches.length,
+            events: matches,
+          });
+        })
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error?.message || String(error),
+          });
+        });
+      return true;
+
     /**
      * Retrieves stored user preferences.
      * Preferences are stored in `chrome.storage.sync` under the "preferences" key.
@@ -586,7 +615,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       if (message.preferences?.googleCalendar) {
         chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
-        updateGoogleCalendar({ interactiveAuth: true });
+        updateGoogleCalendar({ interactiveAuth: true, includeImport: true, force: true });
       } else {
         chrome.alarms.clear(GOOGLE_CALENDAR_ALARM);
         chrome.storage.local.set({ googleCalendarEvents: [] }, () => {
@@ -626,7 +655,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "EVENT_CREATED":
       chrome.storage.sync.get("preferences", (data) => {
         if (data.preferences.googleCalendar) {
-            updateGoogleCalendar();
+            scheduleGoogleCalendarSync();
         }
       });
       chrome.runtime.sendMessage({ type: "EVENT_CREATED" }); // broadcast
@@ -638,7 +667,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "EVENT_UPDATED":
       chrome.storage.sync.get("preferences", (data) => {
         if (data.preferences.googleCalendar) {
-            updateGoogleCalendar();
+            scheduleGoogleCalendarSync();
         }
       });
       chrome.runtime.sendMessage({ type: "EVENT_UPDATED" }, (response) => {
@@ -653,8 +682,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     */
     case "UPDATE_GOOGLE_CALENDAR":
       chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
-      updateGoogleCalendar({ interactiveAuth: true });
-      break;
+      updateGoogleCalendar({
+        interactiveAuth: true,
+        force: Boolean(message.force),
+        includeImport: Boolean(message.includeImport ?? message.force),
+      })
+        .then((result) => {
+          if (result && typeof result === "object") {
+            sendResponse(result);
+            return;
+          }
+
+          sendResponse({ success: Boolean(result) });
+        })
+        .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
+      return true;
 
     /**
      * Default case: Logs an unrecognized message type.
@@ -715,7 +757,7 @@ function bootstrapGoogleCalendarState() {
     }
 
     chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
-    updateGoogleCalendar();
+    updateGoogleCalendar({ includeImport: true });
   });
 }
 
@@ -745,7 +787,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
   if (newGoogleCalendarEnabled) {
     chrome.alarms.create(GOOGLE_CALENDAR_ALARM, { periodInMinutes: BACKGROUND_REFRESH_MINUTES });
-    updateGoogleCalendar({ interactiveAuth: true });
+    updateGoogleCalendar({ interactiveAuth: true, includeImport: true, force: true });
   } else {
     chrome.alarms.clear(GOOGLE_CALENDAR_ALARM);
     chrome.storage.local.set({ googleCalendarEvents: [] }, () => {
@@ -801,68 +843,158 @@ async function fetchCanvasAssignments() {
   }
 }
 
-async function updateGoogleCalendar({ interactiveAuth = false } = {}) {
+function scheduleGoogleCalendarSync({ includeImport = false } = {}) {
+  updateGoogleCalendar.queued = true;
+  updateGoogleCalendar.queuedIncludeImport = updateGoogleCalendar.queuedIncludeImport || includeImport;
+
+  if (updateGoogleCalendar.userActionTimer) {
+    clearTimeout(updateGoogleCalendar.userActionTimer);
+  }
+
+  updateGoogleCalendar.userActionTimer = setTimeout(() => {
+    updateGoogleCalendar.userActionTimer = null;
+    const shouldIncludeImport = updateGoogleCalendar.queuedIncludeImport;
+    updateGoogleCalendar.queued = false;
+    updateGoogleCalendar.queuedIncludeImport = false;
+    updateGoogleCalendar({ force: true, includeImport: shouldIncludeImport });
+  }, GOOGLE_CALENDAR_USER_ACTION_DEBOUNCE_MS);
+}
+
+async function updateGoogleCalendar({ interactiveAuth = false, force = false, includeImport = false } = {}) {
   if (updateGoogleCalendar.inFlight) {
     updateGoogleCalendar.queued = true;
-    return false;
+    updateGoogleCalendar.queuedIncludeImport = updateGoogleCalendar.queuedIncludeImport || includeImport;
+    return { success: true, queued: true, reason: "sync_already_running" };
   }
 
   const now = Date.now();
   const cooldownMs = 2 * 60 * 1000;
-  if (updateGoogleCalendar.lastStartedAt && now - updateGoogleCalendar.lastStartedAt < cooldownMs) {
+  if (!force && updateGoogleCalendar.lastStartedAt && now - updateGoogleCalendar.lastStartedAt < cooldownMs) {
     console.log("Skipping Google Calendar update during cooldown window.");
     updateGoogleCalendar.queued = true;
-    return false;
+    if (!updateGoogleCalendar.cooldownTimer) {
+      const remainingCooldownMs = Math.max(1000, cooldownMs - (now - updateGoogleCalendar.lastStartedAt) + 500);
+      updateGoogleCalendar.cooldownTimer = setTimeout(() => {
+        updateGoogleCalendar.cooldownTimer = null;
+        if (updateGoogleCalendar.queued) {
+          const shouldIncludeImport = updateGoogleCalendar.queuedIncludeImport;
+          updateGoogleCalendar.queued = false;
+          updateGoogleCalendar.queuedIncludeImport = false;
+          updateGoogleCalendar({ force: true, includeImport: shouldIncludeImport });
+        }
+      }, remainingCooldownMs);
+    }
+    return { success: true, queued: true, reason: "cooldown" };
   }
 
   updateGoogleCalendar.inFlight = true;
   updateGoogleCalendar.lastStartedAt = now;
   console.log("UPDATING CALENDAR");
+  let GoogleToken = null;
 
-  try {
-    const GoogleToken = await getGoogleToken(interactiveAuth);
-    if (!GoogleToken) {
-      console.log("No chrome identity token found.");
-      return false;
-    }
+  const setGoogleCalendarSyncStatus = (status) => {
+    chrome.storage.local.set({
+      GoogleCalendarSyncStatus: {
+        ...status,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  };
 
+  const runGoogleCalendarSync = async (token) => {
     const syncAndImport = async (calendarID) => {
       const eventList = await gatherEvents();
-      await syncCalendar(eventList, GoogleToken, calendarID);
-      await importGoogleCalendarEvents(GoogleToken);
+      const syncResult = await syncCalendar(eventList, token, calendarID);
+      if (includeImport) {
+        await importGoogleCalendarEvents(token);
+      }
       chrome.runtime.sendMessage({ type: "GOOGLE_CALENDAR_UPDATED" }, () => {
         if (chrome.runtime.lastError) {
           // handle receiving end does not exist error
         }
       });
+      return syncResult;
     };
 
     const storedCalendarID = await getCalendarID();
     if (!storedCalendarID) {
-      const newCalendarID = await getOrCreateCalendar(GoogleToken);
-      await syncAndImport(newCalendarID);
-      return true;
+      const newCalendarID = await getOrCreateCalendar(token);
+      return syncAndImport(newCalendarID);
     }
 
-    const exists = await checkCalendarExists(GoogleToken, storedCalendarID);
+    const exists = await checkCalendarExists(token, storedCalendarID);
     if (!exists) {
-      const newCalendarID = await getOrCreateCalendar(GoogleToken);
-      await syncAndImport(newCalendarID);
-      return true;
+      const newCalendarID = await getOrCreateCalendar(token);
+      return syncAndImport(newCalendarID);
     }
 
-    await syncAndImport(storedCalendarID);
-    return true;
+    return syncAndImport(storedCalendarID);
+  };
+
+  try {
+    GoogleToken = await getGoogleToken(interactiveAuth);
+    if (!GoogleToken) {
+      console.log("No chrome identity token found.");
+      setGoogleCalendarSyncStatus({
+        success: false,
+        reason: "missing_token",
+        message: "No Google auth token is available. Reconnect Google Calendar from Settings.",
+      });
+      return { success: false, error: "No Google auth token is available. Reconnect Google Calendar from Settings." };
+    }
+
+    const syncResult = await runGoogleCalendarSync(GoogleToken);
+    setGoogleCalendarSyncStatus({ success: true, syncResult });
+    return { success: true, syncResult };
   } catch (error) {
+    if (isGoogleCalendarAuthError(error) && GoogleToken) {
+      console.warn("Google Calendar token rejected. Clearing cached token and retrying once.");
+      await clearGoogleToken(GoogleToken);
+
+      const refreshedToken = await getGoogleToken(false);
+      if (refreshedToken) {
+        try {
+          const syncResult = await runGoogleCalendarSync(refreshedToken);
+          setGoogleCalendarSyncStatus({ success: true, refreshedToken: true, syncResult });
+          return { success: true, refreshedToken: true, syncResult };
+        } catch (retryError) {
+          console.error("Google Calendar background sync failed after token refresh:", retryError);
+          setGoogleCalendarSyncStatus({
+            success: false,
+            reason: isGoogleCalendarAuthError(retryError) ? "invalid_token_after_refresh" : "retry_failed",
+            message: retryError?.message || String(retryError),
+            details: retryError?.details || retryError?.syncResult || null,
+          });
+          return { success: false, error: retryError?.message || String(retryError) };
+        }
+      }
+
+      setGoogleCalendarSyncStatus({
+        success: false,
+        reason: "token_refresh_failed",
+        message: "Google rejected the cached token, and Chrome could not provide a fresh token.",
+        details: error?.details || null,
+      });
+      return { success: false, error: error?.message || String(error) };
+    }
+
     console.error("Google Calendar background sync failed:", error);
-    return false;
+    setGoogleCalendarSyncStatus({
+      success: false,
+      reason: "sync_failed",
+      message: error?.message || String(error),
+      details: error?.details || error?.syncResult || null,
+    });
+    return { success: false, error: error?.message || String(error) };
   } finally {
     updateGoogleCalendar.inFlight = false;
 
     if (updateGoogleCalendar.queued) {
+      const shouldIncludeImport = updateGoogleCalendar.queuedIncludeImport;
       updateGoogleCalendar.queued = false;
+      updateGoogleCalendar.queuedIncludeImport = false;
       setTimeout(() => {
-        updateGoogleCalendar();
+        updateGoogleCalendar({ includeImport: shouldIncludeImport });
       }, 5000);
     }
   }
@@ -870,14 +1002,17 @@ async function updateGoogleCalendar({ interactiveAuth = false } = {}) {
 
 updateGoogleCalendar.inFlight = false;
 updateGoogleCalendar.queued = false;
+updateGoogleCalendar.queuedIncludeImport = false;
 updateGoogleCalendar.lastStartedAt = 0;
+updateGoogleCalendar.cooldownTimer = null;
+updateGoogleCalendar.userActionTimer = null;
 
 async function updateAssignments() {
   const success = await fetchCanvasAssignments();
   if (success) {
     chrome.storage.sync.get("preferences", (data) => {
       if (data.preferences.googleCalendar) {
-        updateGoogleCalendar();
+        scheduleGoogleCalendarSync();
       }
     });
   }

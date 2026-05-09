@@ -32,15 +32,37 @@ const LoginButton = () => {
    * Initiates the Google login process and stores the user profile.
    */
   const handleLogin = () => {
-    chrome.runtime.sendMessage({ type: "LOGIN" }, (response) => {
-      if (response.success) {
-        console.log("User logged in:", response.user);
-        chrome.storage.sync.set({ user: response.user }); // Store user data
-      } else {
-        setError(response.error);
-        console.error("Login failed:", response.error);
-      }
-    });
+    setError(null);
+
+    try {
+      chrome.runtime.sendMessage({ type: "LOGIN" }, (response) => {
+        if (chrome.runtime.lastError) {
+          setError(chrome.runtime.lastError.message || "Reopen Rebel Remind and try again.");
+          return;
+        }
+
+        if (response?.success) {
+          console.log("User logged in:", response.user);
+          chrome.storage.sync.set({ user: response.user }); // Store user data
+          chrome.storage.local.set({
+            GoogleCalendarSyncStatus: {
+              success: true,
+              reason: "login_refreshed",
+              updatedAt: new Date().toISOString(),
+            },
+          });
+        } else {
+          setError(response?.error || "Login failed.");
+          console.error("Login failed:", response?.error);
+        }
+      });
+    } catch (sendError) {
+      setError(
+        String(sendError?.message || "").includes("Extension context invalidated")
+          ? "Rebel Remind was reloaded. Reopen the extension and try again."
+          : sendError?.message || "Reopen Rebel Remind and try again."
+      );
+    }
   };
 
   return (

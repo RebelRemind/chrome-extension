@@ -50,7 +50,7 @@ function CalendarMenu() {
   	locales,
 	})
 
-	const minLimit = setMinutes(setHours(new Date(), 7), 0);
+	const minLimit = setMinutes(setHours(new Date(), 0), 0);
 	const maxLimit = setMinutes(setHours(new Date(), 23), 59);
 
 	const [events, setEvents] = useState([]);
@@ -538,6 +538,106 @@ function addDefaultHour(dateValue) {
 	return new Date(dateValue.getTime() + (60 * 60 * 1000));
 }
 
+function parseEventDateTime(dateValue, timeValue) {
+	if (!dateValue) {
+		return null;
+	}
+
+	const rawTime = String(timeValue || "").trim();
+	if (!rawTime || rawTime.toUpperCase() === "(ALL DAY)") {
+		const parsedDate = new Date(`${dateValue}T00:00:00`);
+		return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+	}
+
+	const isoTimeMatch = rawTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+	const parsed = isoTimeMatch
+		? new Date(`${dateValue}T${isoTimeMatch[1].padStart(2, "0")}:${isoTimeMatch[2]}:${isoTimeMatch[3] || "00"}`)
+		: new Date(`${dateValue} ${rawTime}`);
+
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseTimeParts(value) {
+	const normalized = String(value || "").trim().toUpperCase();
+	const twentyFourHourMatch = normalized.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+	if (twentyFourHourMatch) {
+		return {
+			hour: Number.parseInt(twentyFourHourMatch[1], 10),
+			minute: Number.parseInt(twentyFourHourMatch[2], 10),
+		};
+	}
+
+	const match = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*([AP]M)$/);
+	if (!match) {
+		return null;
+	}
+
+	let hour = Number.parseInt(match[1], 10);
+	const minute = Number.parseInt(match[2] || "0", 10);
+	if (hour === 12) {
+		hour = 0;
+	}
+	if (match[3] === "PM") {
+		hour += 12;
+	}
+
+	return { hour, minute };
+}
+
+function isMidnightEndTime(value) {
+	const parts = parseTimeParts(value);
+	return Boolean(parts && parts.hour === 0 && parts.minute === 0);
+}
+
+function parseDateOnly(value) {
+	const parsed = new Date(`${value}T12:00:00`);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateOnly(date) {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function resolveMidnightDisplayEndDate(startDate, endDate) {
+	const parsedStart = parseDateOnly(startDate);
+	const parsedEnd = parseDateOnly(endDate || startDate);
+	if (parsedStart && parsedEnd && parsedEnd > parsedStart) {
+		parsedEnd.setDate(parsedEnd.getDate() - 1);
+		return formatDateOnly(parsedEnd);
+	}
+
+	return startDate;
+}
+
+function resolveDisplayEventEnd({ start, startDate, endDate, endTime, allDay = false }) {
+	if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
+		return start;
+	}
+
+	if (allDay) {
+		return parseEventDateTime(endDate || startDate, "") || start;
+	}
+
+	if (isMidnightEndTime(endTime)) {
+		return parseEventDateTime(resolveMidnightDisplayEndDate(startDate, endDate), "23:59") || addDefaultHour(start);
+	}
+
+	let end = endTime
+		? parseEventDateTime(endDate || startDate, endTime)
+		: addDefaultHour(start);
+
+	if (end && end <= start && endTime) {
+		end = new Date(end);
+		end.setDate(end.getDate() + 1);
+	}
+
+	if (!end || Number.isNaN(end.getTime()) || end <= start) {
+		return addDefaultHour(start);
+	}
+
+	return end;
+}
+
 function getCanvasDueMessage({
 	canvasIntegrationEnabled,
 	hasCanvasToken,
@@ -605,13 +705,15 @@ const getUserEvents = async () => {
 				const userEvents = data.userEvents;
 				const userCalendarEvents = userEvents.map((event) => {
 					const start = event.allDay
-						? new Date(`${event.startDate}T00:00:00`)
-						: new Date(`${event.startDate}T${event.startTime}:00`);
-					const end = event.allDay
-						? new Date(`${event.startDate}T00:00:00`)
-						: event.endTime
-							? new Date(`${event.startDate}T${event.endTime}:00`)
-							: addDefaultHour(start);
+						? parseEventDateTime(event.startDate, "")
+						: parseEventDateTime(event.startDate, event.startTime);
+					const end = resolveDisplayEventEnd({
+						start,
+						startDate: event.startDate,
+						endDate: event.endDate,
+						endTime: event.endTime,
+						allDay: event.allDay,
+					});
 
 					return {
 						title: event.title,
@@ -642,10 +744,13 @@ const getInolvementCenterEvents = async() => {
 			if (data.filteredIC) {
 				const ICEvents = data.filteredIC;
 				const ICCalendarEvents = ICEvents.map((event) => {
-					const start = new Date(`${event.startDate} ${event.startTime}`);
-					const end = event.endDate && event.endTime
-						? new Date(`${event.endDate} ${event.endTime}`)
-						: addDefaultHour(start);
+					const start = parseEventDateTime(event.startDate, event.startTime);
+					const end = resolveDisplayEventEnd({
+						start,
+						startDate: event.startDate,
+						endDate: event.endDate,
+						endTime: event.endTime,
+					});
 
 					return {
 						title: event.name,
@@ -678,13 +783,15 @@ const getSavedUNLVEvents = async() => {
 				const UNLVCalendarEvents = UNLVEvents.map((event) => {
 					const allDay = event.startTime === "(ALL DAY)";
 					const start = allDay
-						? new Date(`${event.startDate}T00:00:00`)
-						: new Date(`${event.startDate} ${event.startTime}`);
-					const end = allDay
-						? new Date(`${event.endDate || event.startDate}T00:00:00`)
-						: event.endTime
-							? new Date(`${event.endDate || event.startDate} ${event.endTime}`)
-							: addDefaultHour(start);
+						? parseEventDateTime(event.startDate, "")
+						: parseEventDateTime(event.startDate, event.startTime);
+					const end = resolveDisplayEventEnd({
+						start,
+						startDate: event.startDate,
+						endDate: event.endDate,
+						endTime: event.endTime,
+						allDay,
+					});
 
 					return {
 						title: event.name,
@@ -714,13 +821,15 @@ const getGoogleCalendarEvents = async() => {
 				const importedGoogleEvents = googleEvents.map((event) => {
 					const allDay = event.startTime === "(ALL DAY)";
 					const start = allDay
-						? new Date(`${event.startDate}T00:00:00`)
-						: new Date(`${event.startDate}T${event.startTime}:00`);
-					const end = allDay
-						? new Date(`${event.endDate || event.startDate}T00:00:00`)
-						: event.endTime
-							? new Date(`${event.endDate || event.startDate}T${event.endTime}:00`)
-							: addDefaultHour(start);
+						? parseEventDateTime(event.startDate, "")
+						: parseEventDateTime(event.startDate, event.startTime);
+					const end = resolveDisplayEventEnd({
+						start,
+						startDate: event.startDate,
+						endDate: event.endDate,
+						endTime: event.endTime,
+						allDay,
+					});
 
 					return {
 						title: event.title,

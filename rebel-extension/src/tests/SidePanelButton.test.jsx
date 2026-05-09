@@ -6,7 +6,8 @@ import SidePanelButton from "../components/SidePanelButton";
 beforeAll(() => {
   global.chrome = {
     runtime: {
-      sendMessage: jest.fn(),
+      lastError: null,
+      sendMessage: jest.fn((message, callback) => callback?.()),
     },
   };
   window.close = jest.fn();
@@ -31,9 +32,10 @@ describe("SidePanelButton", () => {
 
     fireEvent.click(button);
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-      type: "OPEN_SIDEPANEL",
-    });
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      { type: "OPEN_SIDEPANEL" },
+      expect.any(Function)
+    );
   });
 
   test("check window closed", async () => {
